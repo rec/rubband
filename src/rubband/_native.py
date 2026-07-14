@@ -8,7 +8,19 @@ import numpy as np
 from numpy.typing import NDArray
 
 
+class _NativeStretcher(Protocol):
+    def study(self, audio: NDArray[np.float32], final: bool) -> None: ...
+
+    def process(self, audio: NDArray[np.float32], final: bool) -> None: ...
+
+    def available(self) -> int: ...
+
+    def retrieve(self) -> NDArray[np.float32]: ...
+
+
 class _RubbandBackend(Protocol):
+    Stretcher: type[_NativeStretcher]
+
     def metadata(
         self,
         sample_rate: int,
@@ -44,6 +56,36 @@ def _backend_load_error(error: BaseException) -> str:
 
 
 _rubband = _load_backend()
+
+
+class Stretcher:
+    def __init__(
+        self,
+        sample_rate: int,
+        channels: int,
+        time_ratio: float,
+        pitch_scale: float,
+        option_flags: int,
+    ) -> None:
+        self.handle = _rubband.Stretcher(
+            sample_rate,
+            channels,
+            time_ratio,
+            pitch_scale,
+            option_flags,
+        )
+
+    def study(self, audio: NDArray[np.float32], final: bool) -> None:
+        self.handle.study(np.asarray(audio, dtype=np.float32, order="F"), final)
+
+    def process(self, audio: NDArray[np.float32], final: bool) -> None:
+        self.handle.process(np.asarray(audio, dtype=np.float32, order="F"), final)
+
+    def available(self) -> int:
+        return self.handle.available()
+
+    def retrieve(self) -> NDArray[np.float32]:
+        return np.asarray(self.handle.retrieve(), dtype=np.float32, order="C")
 
 
 def metadata(

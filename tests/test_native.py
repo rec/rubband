@@ -60,6 +60,23 @@ def test_native_pitch_shift_regression(file_regression: FileRegressionFixture) -
     )
 
 
+def test_native_stretcher_regression(file_regression: FileRegressionFixture) -> None:
+    audio = sine_wave(seconds=1.0)
+    stretcher = rubband.Stretcher(SAMPLE_RATE, 1)
+
+    stretcher.study(audio, final=True)
+    stretcher.process(audio, final=True)
+    result = stretcher.retrieve()
+
+    assert result.shape == (SAMPLE_RATE, 1)
+    assert np.max(np.abs(result)) > 0.1
+    file_regression.check(
+        wav_bytes(result[:, 0]),
+        extension=".wav",
+        binary=True,
+    )
+
+
 def test_native_stereo_outputs_have_matching_prefixes() -> None:
     audio = np.ascontiguousarray(
         np.column_stack(

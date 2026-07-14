@@ -214,6 +214,80 @@ def test_metadata_returns_accessors(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
+def test_stretcher_mirrors_streaming_lifecycle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    options = rubband.StretchOptions(
+        sample_rate=SAMPLE_RATE,
+        time_ratio=1.25,
+        pitch_scale=2.0,
+    )
+
+    class NativeStretcher:
+        def __init__(
+            self,
+            sample_rate: int,
+            channels: int,
+            time_ratio: float,
+            pitch_scale: float,
+            option_flags: int,
+        ) -> None:
+            assert sample_rate == SAMPLE_RATE
+            assert channels == 2
+            assert time_ratio == 1.25
+            assert pitch_scale == 2.0
+            assert option_flags == options.option_flags
+            self.studied = False
+            self.processed = False
+
+        def study(self, audio: NDArray[np.float32], final: bool) -> None:
+            assert audio.shape == (SAMPLE_RATE, 2)
+            assert not final
+            self.studied = True
+
+        def process(self, audio: NDArray[np.float32], final: bool) -> None:
+            assert audio.shape == (SAMPLE_RATE, 2)
+            assert final
+            self.processed = True
+
+        def available(self) -> int:
+            return 3
+
+        def retrieve(self) -> NDArray[np.float32]:
+            assert self.studied
+            assert self.processed
+            return np.zeros((3, 2), dtype=np.float32)
+
+    monkeypatch.setattr(_native, "Stretcher", NativeStretcher)
+    audio = np.ascontiguousarray(
+        np.column_stack((sine_wave(seconds=1.0), sine_wave(seconds=1.0, hz=660))),
+        dtype=np.float32,
+    )
+
+    stretcher = rubband.Stretcher(SAMPLE_RATE, 2, options=options)
+    stretcher.study(audio)
+    stretcher.process(audio, final=True)
+
+    assert stretcher.available() == 3
+    assert stretcher.retrieve().shape == (3, 2)
+
+
+def test_stretcher_rejects_channel_mismatch() -> None:
+    stretcher = rubband.Stretcher(SAMPLE_RATE, 2)
+
+    with pytest.raises(ValueError, match="channel count"):
+        stretcher.study(sine_wave(seconds=1.0))
+
+
+def test_stretcher_rejects_mismatched_option_sample_rate() -> None:
+    with pytest.raises(ValueError, match="sample_rate"):
+        rubband.Stretcher(
+            SAMPLE_RATE,
+            1,
+            options=rubband.StretchOptions(sample_rate=44_100),
+        )
+
+
 def test_backend_load_error_is_clear() -> None:
     message = _native._backend_load_error(ImportError("Library not loaded"))
 

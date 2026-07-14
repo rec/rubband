@@ -3,11 +3,12 @@ from __future__ import annotations
 import enum
 import sys
 from enum import StrEnum
-from typing import cast
+from functools import cached_property
+from typing import Self, cast
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
 from . import _native
 
@@ -148,6 +149,67 @@ class RubberBandMetadata(BaseModel):
     pitch_scale: float
 
 
+class Stretcher(BaseModel):
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    sample_rate: int
+    channels: int
+    options: StretchOptions | None = None
+
+    def __init__(
+        self,
+        sample_rate: int,
+        channels: int,
+        options: StretchOptions | None = None,
+    ) -> None:
+        super().__init__(sample_rate=sample_rate, channels=channels, options=options)
+
+    @field_validator("sample_rate")
+    @classmethod
+    def validate_sample_rate(cls, value: int) -> int:
+        return StretchOptions.validate_sample_rate(value)
+
+    @field_validator("channels")
+    @classmethod
+    def validate_channels(cls, value: int) -> int:
+        if isinstance(value, bool):
+            raise TypeError("channels must be an integer")
+        if value < 1 or value > 256:
+            raise ValueError("channels must be between 1 and 256")
+        return value
+
+    @model_validator(mode="after")
+    def validate_options(self) -> Self:
+        if self.options is not None and self.options.sample_rate != self.sample_rate:
+            raise ValueError("options sample_rate must match stretcher sample_rate")
+        return self
+
+    @cached_property
+    def native(self) -> _native.Stretcher:
+        options = self.options or StretchOptions(sample_rate=self.sample_rate)
+        return _native.Stretcher(
+            self.sample_rate,
+            self.channels,
+            options.time_ratio,
+            options.pitch_scale,
+            options.option_flags,
+        )
+
+    def study(self, audio: NDArray[np.float32], final: bool = False) -> None:
+        self.native.study(_validate_stretcher_audio(audio, self.channels), final)
+
+    def process(self, audio: NDArray[np.float32], final: bool = False) -> None:
+        self.native.process(_validate_stretcher_audio(audio, self.channels), final)
+
+    def available(self) -> int:
+        return self.native.available()
+
+    def retrieve(self) -> NDArray[np.float32]:
+        result = self.native.retrieve()
+        _validate_result(result, self.channels)
+        return result
+
+
 def stretch(
     audio: NDArray[np.float32],
     options: StretchOptions,
@@ -221,6 +283,16 @@ def _validate_result(result: object, channels: int) -> None:
         raise ValueError("native backend returned audio with the wrong channel count")
     if not result.flags.c_contiguous:
         raise ValueError("native backend returned non-contiguous audio")
+
+
+def _validate_stretcher_audio(
+    audio: NDArray[np.float32],
+    channels: int,
+) -> NDArray[np.float32]:
+    normalized, _ = _validate_audio(audio)
+    if normalized.shape[1] != channels:
+        raise ValueError("audio channel count does not match stretcher")
+    return normalized
 
 
 _PRESET_OPTIONS = {
