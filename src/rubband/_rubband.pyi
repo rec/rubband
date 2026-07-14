@@ -8,4 +8,5 @@ def stretch_float32(
     sample_rate: int,
     time_ratio: float,
     pitch_scale: float,
+    option_flags: int,
 ) -> NDArray[np.float32]: ...

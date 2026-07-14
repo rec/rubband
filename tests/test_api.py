@@ -25,11 +25,20 @@ def test_stretch_accepts_one_second_mono_audio(
         sample_rate: int,
         time_ratio: float,
         pitch_scale: float,
+        option_flags: int,
     ) -> NDArray[np.float32]:
         assert backend_audio.shape == (SAMPLE_RATE, 1)
         assert sample_rate == SAMPLE_RATE
         assert time_ratio == 1.25
         assert pitch_scale == 0.5
+        assert (
+            option_flags
+            == rubband.StretchOptions(
+                sample_rate=SAMPLE_RATE,
+                time_ratio=1.25,
+                pitch_scale=0.5,
+            ).option_flags
+        )
         return backend_audio.copy()
 
     monkeypatch.setattr(_native, "stretch_float32", stretch_float32)
@@ -62,10 +71,18 @@ def test_stretch_accepts_one_second_stereo_audio(
         sample_rate: int,
         time_ratio: float,
         pitch_scale: float,
+        option_flags: int,
     ) -> NDArray[np.float32]:
         assert sample_rate == SAMPLE_RATE
         assert time_ratio == 1.0
         assert pitch_scale == 2.0
+        assert (
+            option_flags
+            == rubband.StretchOptions(
+                sample_rate=SAMPLE_RATE,
+                pitch_scale=2.0,
+            ).option_flags
+        )
         return backend_audio.copy()
 
     monkeypatch.setattr(_native, "stretch_float32", stretch_float32)
@@ -118,6 +135,41 @@ def test_stretch_rejects_non_positive_ratios() -> None:
         rubband.StretchOptions(sample_rate=SAMPLE_RATE, time_ratio=0)
     with pytest.raises(ValueError, match="ratio"):
         rubband.StretchOptions(sample_rate=SAMPLE_RATE, pitch_scale=0)
+
+
+def test_stretch_options_default_flags_match_current_backend_defaults() -> None:
+    options = rubband.StretchOptions(sample_rate=SAMPLE_RATE)
+
+    assert options.option_flags == 0x00010000
+
+
+def test_stretch_options_represent_all_rubber_band_option_groups() -> None:
+    options = rubband.StretchOptions(
+        sample_rate=SAMPLE_RATE,
+        process=rubband.ProcessOption.real_time,
+        stretch=rubband.StretchOption.precise,
+        transients=rubband.TransientsOption.smooth,
+        detector=rubband.DetectorOption.soft,
+        phase=rubband.PhaseOption.independent,
+        threading=rubband.ThreadingOption.always,
+        window=rubband.WindowOption.long,
+        smoothing=rubband.SmoothingOption.on,
+        formant=rubband.FormantOption.preserved,
+        pitch=rubband.PitchOption.high_consistency,
+        channels=rubband.ChannelsOption.together,
+        engine=rubband.EngineOption.finer,
+    )
+
+    assert options.option_flags == 0x35A22A11
+
+
+def test_stretch_options_include_rubber_band_presets() -> None:
+    options = rubband.StretchOptions(
+        sample_rate=SAMPLE_RATE,
+        preset=rubband.PresetOption.percussive,
+    )
+
+    assert options.option_flags == 0x00112000
 
 
 def test_backend_load_error_is_clear() -> None:

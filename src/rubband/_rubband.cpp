@@ -17,7 +17,8 @@ OutputArray stretch_float32(
     AudioArray audio,
     int sample_rate,
     double time_ratio,
-    double pitch_scale
+    double pitch_scale,
+    int option_flags
 ) {
     const size_t frames = audio.shape(0);
     const size_t channels = audio.shape(1);
@@ -47,15 +48,16 @@ OutputArray stretch_float32(
     RubberBand::RubberBandStretcher stretcher(
         static_cast<size_t>(sample_rate),
         channels,
-        RubberBand::RubberBandStretcher::OptionProcessOffline |
-            RubberBand::RubberBandStretcher::OptionThreadingNever,
+        option_flags,
         time_ratio,
         pitch_scale
     );
     stretcher.setExpectedInputDuration(frames);
 
     nb::gil_scoped_release release;
-    stretcher.study(input_channels.data(), frames, true);
+    if ((option_flags & RubberBand::RubberBandStretcher::OptionProcessRealTime) == 0) {
+        stretcher.study(input_channels.data(), frames, true);
+    }
     stretcher.process(input_channels.data(), frames, true);
 
     int available = stretcher.available();
@@ -101,6 +103,7 @@ NB_MODULE(_rubband, module) {
         nb::arg("audio"),
         nb::arg("sample_rate"),
         nb::arg("time_ratio"),
-        nb::arg("pitch_scale")
+        nb::arg("pitch_scale"),
+        nb::arg("option_flags")
     );
 }

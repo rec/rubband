@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import enum
 import sys
+from enum import StrEnum
 from typing import cast
 
 import numpy as np
@@ -10,12 +12,95 @@ from pydantic import BaseModel, ConfigDict, field_validator
 from . import _native
 
 
+class ProcessOption(StrEnum):
+    offline = enum.auto()
+    real_time = enum.auto()
+
+
+class StretchOption(StrEnum):
+    elastic = enum.auto()
+    precise = enum.auto()
+
+
+class TransientsOption(StrEnum):
+    crisp = enum.auto()
+    mixed = enum.auto()
+    smooth = enum.auto()
+
+
+class DetectorOption(StrEnum):
+    compound = enum.auto()
+    percussive = enum.auto()
+    soft = enum.auto()
+
+
+class PhaseOption(StrEnum):
+    laminar = enum.auto()
+    independent = enum.auto()
+
+
+class ThreadingOption(StrEnum):
+    auto = enum.auto()
+    never = enum.auto()
+    always = enum.auto()
+
+
+class WindowOption(StrEnum):
+    standard = enum.auto()
+    short = enum.auto()
+    long = enum.auto()
+
+
+class SmoothingOption(StrEnum):
+    off = enum.auto()
+    on = enum.auto()
+
+
+class FormantOption(StrEnum):
+    shifted = enum.auto()
+    preserved = enum.auto()
+
+
+class PitchOption(StrEnum):
+    high_speed = enum.auto()
+    high_quality = enum.auto()
+    high_consistency = enum.auto()
+
+
+class ChannelsOption(StrEnum):
+    apart = enum.auto()
+    together = enum.auto()
+
+
+class EngineOption(StrEnum):
+    faster = enum.auto()
+    finer = enum.auto()
+
+
+class PresetOption(StrEnum):
+    default = enum.auto()
+    percussive = enum.auto()
+
+
 class StretchOptions(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     sample_rate: int
     time_ratio: float = 1.0
     pitch_scale: float = 1.0
+    preset: PresetOption = PresetOption.default
+    process: ProcessOption = ProcessOption.offline
+    stretch: StretchOption = StretchOption.elastic
+    transients: TransientsOption = TransientsOption.crisp
+    detector: DetectorOption = DetectorOption.compound
+    phase: PhaseOption = PhaseOption.laminar
+    threading: ThreadingOption = ThreadingOption.never
+    window: WindowOption = WindowOption.standard
+    smoothing: SmoothingOption = SmoothingOption.off
+    formant: FormantOption = FormantOption.shifted
+    pitch: PitchOption = PitchOption.high_speed
+    channels: ChannelsOption = ChannelsOption.apart
+    engine: EngineOption = EngineOption.faster
 
     @field_validator("sample_rate")
     @classmethod
@@ -33,6 +118,24 @@ class StretchOptions(BaseModel):
             raise ValueError("ratio must be greater than zero")
         return value
 
+    @property
+    def option_flags(self) -> int:
+        return (
+            _PRESET_OPTIONS[self.preset]
+            | _PROCESS_OPTIONS[self.process]
+            | _STRETCH_OPTIONS[self.stretch]
+            | _TRANSIENTS_OPTIONS[self.transients]
+            | _DETECTOR_OPTIONS[self.detector]
+            | _PHASE_OPTIONS[self.phase]
+            | _THREADING_OPTIONS[self.threading]
+            | _WINDOW_OPTIONS[self.window]
+            | _SMOOTHING_OPTIONS[self.smoothing]
+            | _FORMANT_OPTIONS[self.formant]
+            | _PITCH_OPTIONS[self.pitch]
+            | _CHANNELS_OPTIONS[self.channels]
+            | _ENGINE_OPTIONS[self.engine]
+        )
+
 
 def stretch(
     audio: NDArray[np.float32],
@@ -49,6 +152,7 @@ def stretch(
         options.sample_rate,
         options.time_ratio,
         options.pitch_scale,
+        options.option_flags,
     )
     _validate_result(result, normalized.shape[1])
     if mono:
@@ -94,3 +198,62 @@ def _validate_result(result: object, channels: int) -> None:
         raise ValueError("native backend returned audio with the wrong channel count")
     if not result.flags.c_contiguous:
         raise ValueError("native backend returned non-contiguous audio")
+
+
+_PRESET_OPTIONS = {
+    PresetOption.default: 0x00000000,
+    PresetOption.percussive: 0x00102000,
+}
+_PROCESS_OPTIONS = {
+    ProcessOption.offline: 0x00000000,
+    ProcessOption.real_time: 0x00000001,
+}
+_STRETCH_OPTIONS = {
+    StretchOption.elastic: 0x00000000,
+    StretchOption.precise: 0x00000010,
+}
+_TRANSIENTS_OPTIONS = {
+    TransientsOption.crisp: 0x00000000,
+    TransientsOption.mixed: 0x00000100,
+    TransientsOption.smooth: 0x00000200,
+}
+_DETECTOR_OPTIONS = {
+    DetectorOption.compound: 0x00000000,
+    DetectorOption.percussive: 0x00000400,
+    DetectorOption.soft: 0x00000800,
+}
+_PHASE_OPTIONS = {
+    PhaseOption.laminar: 0x00000000,
+    PhaseOption.independent: 0x00002000,
+}
+_THREADING_OPTIONS = {
+    ThreadingOption.auto: 0x00000000,
+    ThreadingOption.never: 0x00010000,
+    ThreadingOption.always: 0x00020000,
+}
+_WINDOW_OPTIONS = {
+    WindowOption.standard: 0x00000000,
+    WindowOption.short: 0x00100000,
+    WindowOption.long: 0x00200000,
+}
+_SMOOTHING_OPTIONS = {
+    SmoothingOption.off: 0x00000000,
+    SmoothingOption.on: 0x00800000,
+}
+_FORMANT_OPTIONS = {
+    FormantOption.shifted: 0x00000000,
+    FormantOption.preserved: 0x01000000,
+}
+_PITCH_OPTIONS = {
+    PitchOption.high_speed: 0x00000000,
+    PitchOption.high_quality: 0x02000000,
+    PitchOption.high_consistency: 0x04000000,
+}
+_CHANNELS_OPTIONS = {
+    ChannelsOption.apart: 0x00000000,
+    ChannelsOption.together: 0x10000000,
+}
+_ENGINE_OPTIONS = {
+    EngineOption.faster: 0x00000000,
+    EngineOption.finer: 0x20000000,
+}

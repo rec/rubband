@@ -15,6 +15,7 @@ class _RubbandBackend(Protocol):
         sample_rate: int,
         time_ratio: float,
         pitch_scale: float,
+        option_flags: int,
     ) -> NDArray[np.float32]: ...
 
 
@@ -41,6 +42,7 @@ def stretch_float32(
     sample_rate: int,
     time_ratio: float,
     pitch_scale: float,
+    option_flags: int,
 ) -> NDArray[np.float32]:
     planar = np.asarray(audio, dtype=np.float32, order="F")
     result = _rubband.stretch_float32(
@@ -48,5 +50,6 @@ def stretch_float32(
         sample_rate,
         time_ratio,
         pitch_scale,
+        option_flags,
     )
     return np.asarray(result, dtype=np.float32, order="C")
