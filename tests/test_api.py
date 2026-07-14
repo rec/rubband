@@ -120,6 +120,29 @@ def test_stretch_rejects_non_positive_ratios() -> None:
         rubband.StretchOptions(sample_rate=SAMPLE_RATE, pitch_scale=0)
 
 
+def test_backend_load_error_is_clear() -> None:
+    message = _native._backend_load_error(ImportError("Library not loaded"))
+
+    assert "could not load its native Rubber Band extension" in message
+    assert "Install librubberband and reinstall rubband" in message
+    assert "Library not loaded" in message
+
+
+def test_backend_load_failure_exits_without_traceback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_import(name: str) -> object:
+        raise ImportError(f"missing {name}")
+
+    monkeypatch.setattr(_native.importlib, "import_module", fail_import)
+
+    with pytest.raises(SystemExit) as error:
+        _native._load_backend()
+
+    assert "could not load its native Rubber Band extension" in str(error.value)
+    assert "missing rubband._rubband" in str(error.value)
+
+
 def sine_wave(seconds: float, hz: float = 440.0) -> NDArray[np.float32]:
     frames = int(SAMPLE_RATE * seconds)
     return np.array(
