@@ -137,6 +137,17 @@ class StretchOptions(BaseModel):
         )
 
 
+class RubberBandMetadata(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    engine_version: int
+    available: int
+    preferred_start_pad: int
+    start_delay: int
+    time_ratio: float
+    pitch_scale: float
+
+
 def stretch(
     audio: NDArray[np.float32],
     options: StretchOptions,
@@ -158,6 +169,18 @@ def stretch(
     if mono:
         return result[:, 0].copy()
     return result
+
+
+def metadata(options: StretchOptions, channels: int = 1) -> RubberBandMetadata:
+    return RubberBandMetadata.model_validate(
+        _native.metadata(
+            options.sample_rate,
+            channels,
+            options.time_ratio,
+            options.pitch_scale,
+            options.option_flags,
+        )
+    )
 
 
 def main() -> None:

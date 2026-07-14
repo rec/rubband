@@ -13,6 +13,33 @@ namespace nb = nanobind;
 using AudioArray = nb::ndarray<nb::numpy, const float, nb::shape<-1, -1>, nb::f_contig>;
 using OutputArray = nb::ndarray<nb::numpy, float, nb::shape<-1, -1>, nb::f_contig>;
 
+nb::dict metadata(
+    int sample_rate,
+    int channels,
+    double time_ratio,
+    double pitch_scale,
+    int option_flags
+) {
+    if (channels < 1 || channels > 256) {
+        throw std::runtime_error("expected channels between 1 and 256");
+    }
+    RubberBand::RubberBandStretcher stretcher(
+        static_cast<size_t>(sample_rate),
+        static_cast<size_t>(channels),
+        option_flags,
+        time_ratio,
+        pitch_scale
+    );
+    nb::dict result;
+    result["engine_version"] = stretcher.getEngineVersion();
+    result["available"] = stretcher.available();
+    result["preferred_start_pad"] = stretcher.getPreferredStartPad();
+    result["start_delay"] = stretcher.getStartDelay();
+    result["time_ratio"] = stretcher.getTimeRatio();
+    result["pitch_scale"] = stretcher.getPitchScale();
+    return result;
+}
+
 OutputArray stretch_float32(
     AudioArray audio,
     int sample_rate,
@@ -97,6 +124,15 @@ OutputArray stretch_float32(
 }
 
 NB_MODULE(_rubband, module) {
+    module.def(
+        "metadata",
+        &metadata,
+        nb::arg("sample_rate"),
+        nb::arg("channels"),
+        nb::arg("time_ratio"),
+        nb::arg("pitch_scale"),
+        nb::arg("option_flags")
+    );
     module.def(
         "stretch_float32",
         &stretch_float32,

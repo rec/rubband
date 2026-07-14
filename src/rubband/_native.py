@@ -9,6 +9,15 @@ from numpy.typing import NDArray
 
 
 class _RubbandBackend(Protocol):
+    def metadata(
+        self,
+        sample_rate: int,
+        channels: int,
+        time_ratio: float,
+        pitch_scale: float,
+        option_flags: int,
+    ) -> dict[str, int | float]: ...
+
     def stretch_float32(
         self,
         audio: NDArray[np.float32],
@@ -35,6 +44,22 @@ def _backend_load_error(error: BaseException) -> str:
 
 
 _rubband = _load_backend()
+
+
+def metadata(
+    sample_rate: int,
+    channels: int,
+    time_ratio: float,
+    pitch_scale: float,
+    option_flags: int,
+) -> dict[str, int | float]:
+    return _rubband.metadata(
+        sample_rate,
+        channels,
+        time_ratio,
+        pitch_scale,
+        option_flags,
+    )
 
 
 def stretch_float32(

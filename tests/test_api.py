@@ -172,6 +172,48 @@ def test_stretch_options_include_rubber_band_presets() -> None:
     assert options.option_flags == 0x00112000
 
 
+def test_metadata_returns_accessors(monkeypatch: pytest.MonkeyPatch) -> None:
+    options = rubband.StretchOptions(
+        sample_rate=SAMPLE_RATE,
+        time_ratio=1.25,
+        pitch_scale=2.0,
+    )
+
+    def metadata(
+        sample_rate: int,
+        channels: int,
+        time_ratio: float,
+        pitch_scale: float,
+        option_flags: int,
+    ) -> dict[str, int | float]:
+        assert sample_rate == SAMPLE_RATE
+        assert channels == 2
+        assert time_ratio == 1.25
+        assert pitch_scale == 2.0
+        assert option_flags == options.option_flags
+        return {
+            "engine_version": 2,
+            "available": 0,
+            "preferred_start_pad": 128,
+            "start_delay": 64,
+            "time_ratio": 1.25,
+            "pitch_scale": 2.0,
+        }
+
+    monkeypatch.setattr(_native, "metadata", metadata)
+
+    result = rubband.metadata(options, channels=2)
+
+    assert result == rubband.RubberBandMetadata(
+        engine_version=2,
+        available=0,
+        preferred_start_pad=128,
+        start_delay=64,
+        time_ratio=1.25,
+        pitch_scale=2.0,
+    )
+
+
 def test_backend_load_error_is_clear() -> None:
     message = _native._backend_load_error(ImportError("Library not loaded"))
 
