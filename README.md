@@ -24,5 +24,5 @@ Input constraints:
 - C-contiguous arrays only
 - sample rates from 8,000 to 192,000 Hz
 
-The native Rubber Band backend is not implemented yet. Calling `stretch` validates
-the public API contract, then delegates to the native backend hook.
+The native backend is a nanobind extension over Rubber Band. Building it requires
+`librubberband` to be installed and discoverable through `pkg-config`.
