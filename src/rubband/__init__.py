@@ -5,15 +5,38 @@ from typing import cast
 
 import numpy as np
 from numpy.typing import NDArray
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from . import _native
 
 
+class StretchOptions(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    sample_rate: int
+    time_ratio: float = 1.0
+    pitch_scale: float = 1.0
+
+    @field_validator("sample_rate")
+    @classmethod
+    def validate_sample_rate(cls, value: int) -> int:
+        if isinstance(value, bool):
+            raise TypeError("sample_rate must be an integer")
+        if value < 8000 or value > 192000:
+            raise ValueError("sample_rate must be between 8000 and 192000")
+        return value
+
+    @field_validator("time_ratio", "pitch_scale")
+    @classmethod
+    def validate_positive_ratio(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("ratio must be greater than zero")
+        return value
+
+
 def stretch(
     audio: NDArray[np.float32],
-    sample_rate: int,
-    time_ratio: float = 1.0,
-    pitch_scale: float = 1.0,
+    options: StretchOptions,
 ) -> NDArray[np.float32]:
     """Stretch and pitch-shift CPU NumPy audio with Rubber Band.
 
@@ -21,12 +44,11 @@ def stretch(
     ``(frames, channels)`` for multichannel audio. It must be C-contiguous.
     """
     normalized, mono = _validate_audio(audio)
-    _validate_parameters(sample_rate, time_ratio, pitch_scale)
     result = _native.stretch_float32(
         normalized,
-        sample_rate,
-        time_ratio,
-        pitch_scale,
+        options.sample_rate,
+        options.time_ratio,
+        options.pitch_scale,
     )
     _validate_result(result, normalized.shape[1])
     if mono:
@@ -59,19 +81,6 @@ def _validate_audio(audio: object) -> tuple[NDArray[np.float32], bool]:
     if not audio.flags.c_contiguous:
         raise ValueError("audio must be C-contiguous")
     return typed_audio, False
-
-
-def _validate_parameters(
-    sample_rate: int, time_ratio: float, pitch_scale: float
-) -> None:
-    if isinstance(sample_rate, bool) or not isinstance(sample_rate, int):
-        raise TypeError("sample_rate must be an integer")
-    if sample_rate < 8000 or sample_rate > 192000:
-        raise ValueError("sample_rate must be between 8000 and 192000")
-    if time_ratio <= 0:
-        raise ValueError("time_ratio must be greater than zero")
-    if pitch_scale <= 0:
-        raise ValueError("pitch_scale must be greater than zero")
 
 
 def _validate_result(result: object, channels: int) -> None:

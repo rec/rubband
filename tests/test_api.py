@@ -36,9 +36,11 @@ def test_stretch_accepts_one_second_mono_audio(
 
     result = rubband.stretch(
         audio,
-        sample_rate=SAMPLE_RATE,
-        time_ratio=1.25,
-        pitch_scale=0.5,
+        rubband.StretchOptions(
+            sample_rate=SAMPLE_RATE,
+            time_ratio=1.25,
+            pitch_scale=0.5,
+        ),
     )
 
     assert result.shape == (SAMPLE_RATE,)
@@ -70,8 +72,7 @@ def test_stretch_accepts_one_second_stereo_audio(
 
     result = rubband.stretch(
         np.ascontiguousarray(audio, dtype=np.float32),
-        sample_rate=SAMPLE_RATE,
-        pitch_scale=2.0,
+        rubband.StretchOptions(sample_rate=SAMPLE_RATE, pitch_scale=2.0),
     )
 
     assert result.shape == (SAMPLE_RATE, 2)
@@ -84,37 +85,39 @@ def test_stretch_accepts_one_second_stereo_audio(
 
 def test_stretch_rejects_non_numpy_audio() -> None:
     with pytest.raises(TypeError, match="NumPy ndarray"):
-        rubband.stretch([0.0], sample_rate=SAMPLE_RATE)  # type: ignore[arg-type]
+        rubband.stretch(
+            [0.0],  # type: ignore[arg-type]
+            rubband.StretchOptions(sample_rate=SAMPLE_RATE),
+        )
 
 
 def test_stretch_rejects_non_float32_audio() -> None:
     audio = np.zeros(SAMPLE_RATE, dtype=np.float64)
 
     with pytest.raises(TypeError, match="float32"):
-        rubband.stretch(audio, sample_rate=SAMPLE_RATE)  # type: ignore[arg-type]
+        rubband.stretch(
+            audio,  # type: ignore[arg-type]
+            rubband.StretchOptions(sample_rate=SAMPLE_RATE),
+        )
 
 
 def test_stretch_rejects_non_contiguous_audio() -> None:
     audio = np.zeros((SAMPLE_RATE, 2), dtype=np.float32)[::2]
 
     with pytest.raises(ValueError, match="C-contiguous"):
-        rubband.stretch(audio, sample_rate=SAMPLE_RATE)
+        rubband.stretch(audio, rubband.StretchOptions(sample_rate=SAMPLE_RATE))
 
 
 def test_stretch_rejects_out_of_range_sample_rate() -> None:
-    audio = np.zeros(SAMPLE_RATE, dtype=np.float32)
-
     with pytest.raises(ValueError, match="between 8000 and 192000"):
-        rubband.stretch(audio, sample_rate=7999)
+        rubband.StretchOptions(sample_rate=7999)
 
 
 def test_stretch_rejects_non_positive_ratios() -> None:
-    audio = np.zeros(SAMPLE_RATE, dtype=np.float32)
-
-    with pytest.raises(ValueError, match="time_ratio"):
-        rubband.stretch(audio, sample_rate=SAMPLE_RATE, time_ratio=0)
-    with pytest.raises(ValueError, match="pitch_scale"):
-        rubband.stretch(audio, sample_rate=SAMPLE_RATE, pitch_scale=0)
+    with pytest.raises(ValueError, match="ratio"):
+        rubband.StretchOptions(sample_rate=SAMPLE_RATE, time_ratio=0)
+    with pytest.raises(ValueError, match="ratio"):
+        rubband.StretchOptions(sample_rate=SAMPLE_RATE, pitch_scale=0)
 
 
 def sine_wave(seconds: float, hz: float = 440.0) -> NDArray[np.float32]:

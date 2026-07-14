@@ -9,9 +9,11 @@ import rubband
 
 shifted = rubband.stretch(
     audio,
-    sample_rate=48_000,
-    time_ratio=1.25,
-    pitch_scale=1.0,
+    rubband.StretchOptions(
+        sample_rate=48_000,
+        time_ratio=1.25,
+        pitch_scale=1.0,
+    ),
 )
 ```
 

@@ -31,8 +31,7 @@ def test_native_stretch_regression(file_regression: FileRegressionFixture) -> No
 
     result = rubband.stretch(
         audio,
-        sample_rate=SAMPLE_RATE,
-        time_ratio=1.25,
+        rubband.StretchOptions(sample_rate=SAMPLE_RATE, time_ratio=1.25),
     )
 
     assert result.shape == (60_000,)
@@ -49,8 +48,7 @@ def test_native_pitch_shift_regression(file_regression: FileRegressionFixture) -
 
     result = rubband.stretch(
         audio,
-        sample_rate=SAMPLE_RATE,
-        pitch_scale=2.0,
+        rubband.StretchOptions(sample_rate=SAMPLE_RATE, pitch_scale=2.0),
     )
 
     assert result.shape == (SAMPLE_RATE,)
@@ -76,9 +74,11 @@ def test_native_stereo_outputs_have_matching_prefixes() -> None:
     outputs = [
         rubband.stretch(
             audio,
-            sample_rate=SAMPLE_RATE,
-            time_ratio=1.25,
-            pitch_scale=2.0,
+            rubband.StretchOptions(
+                sample_rate=SAMPLE_RATE,
+                time_ratio=1.25,
+                pitch_scale=2.0,
+            ),
         )
         for _ in range(8)
     ]
@@ -112,8 +112,10 @@ def test_native_pianolead_pitch_regression(
 
     result = rubband.stretch(
         audio,
-        sample_rate=sample_rate,
-        pitch_scale=2.0 ** (semitones / 12.0),
+        rubband.StretchOptions(
+            sample_rate=sample_rate,
+            pitch_scale=2.0 ** (semitones / 12.0),
+        ),
     )
 
     assert result.shape[0] >= sample_rate
