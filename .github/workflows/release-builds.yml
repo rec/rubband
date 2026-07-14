@@ -1,0 +1,141 @@
+name: Release builds
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  validate-tag:
+    name: Require tag on main
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require tagged commit to be on main
+        run: |
+          git fetch origin main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: validate-tag
+    runs-on: ${{ matrix.os }}
+    env:
+      UV_NO_SOURCES: "1"
+      ARTIFACT_NAME: rubband-${{ github.ref_name }}-${{ matrix.artifact }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+            artifact: macOS.tar.gz
+          - name: Linux
+            os: ubuntu-22.04
+            artifact: Linux.tar.gz
+          - name: Windows
+            os: windows-latest
+            artifact: Windows.zip
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Install macOS Rubber Band
+        if: runner.os == 'macOS'
+        run: brew install rubberband pkg-config
+
+      - name: Install Linux Rubber Band
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y librubberband-dev pkg-config
+
+      - name: Install Windows Rubber Band
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          vcpkg install rubberband:x64-windows
+          "CMAKE_ARGS=-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/bin" | Out-File -FilePath $env:GITHUB_PATH -Append
+
+      - name: Install project
+        run: uv sync --dev
+
+      - name: Test
+        run: uv run pytest
+
+      - name: Build wheel and sdist
+        run: uv build --sdist --wheel --out-dir dist
+
+      - name: Smoke-test wheel
+        shell: bash
+        run: |
+          wheel="$(find dist -maxdepth 1 -name 'rubband-*.whl' | sort | tail -n 1)"
+          uv run python scripts/smoke_wheel.py "$wheel"
+
+      - name: Package Unix artifacts
+        if: runner.os != 'Windows'
+        run: tar -czf "$ARTIFACT_NAME" -C dist .
+
+      - name: Package Windows artifacts
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist/* -DestinationPath "$env:ARTIFACT_NAME"
+
+      - name: Write Unix SHA256 checksum
+        if: runner.os != 'Windows'
+        run: shasum -a 256 "$ARTIFACT_NAME" > "$ARTIFACT_NAME.sha256"
+
+      - name: Write Windows SHA256 checksum
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash -Algorithm SHA256 "$env:ARTIFACT_NAME").Hash.ToLower()
+          "$hash  $env:ARTIFACT_NAME" | Set-Content "$env:ARTIFACT_NAME.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.ARTIFACT_NAME }}
+          path: |
+            ${{ env.ARTIFACT_NAME }}
+            ${{ env.ARTIFACT_NAME }}.sha256
+
+  release:
+    name: Publish release
+    needs: build
+    runs-on: ubuntu-22.04
+    if: startsWith(github.ref, 'refs/tags/')
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          cat > RELEASE-NOTES.md <<EOF
+          ## Downloads
+
+          Each archive contains the wheel, source distribution, and checksum for one platform.
+
+          - macOS: \`rubband-$TAG-macOS.tar.gz\`
+          - Linux: \`rubband-$TAG-Linux.tar.gz\`
+          - Windows: \`rubband-$TAG-Windows.zip\`
+
+          These wheels are built against the platform Rubber Band library used in CI.
+          EOF
+          notes="$(cat RELEASE-NOTES.md)"
+          gh release create "$TAG" artifacts/* --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes "$notes" --generate-notes

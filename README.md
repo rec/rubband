@@ -28,3 +28,27 @@ Input constraints:
 
 The native backend is a nanobind extension over Rubber Band. Building it requires
 `librubberband` to be installed and discoverable through `pkg-config`.
+
+## Building
+
+Local source builds need Rubber Band development headers and libraries:
+
+- macOS: `brew install rubberband pkg-config`
+- Linux: install your distribution's `librubberband-dev` or equivalent package
+- Windows: install Rubber Band through `vcpkg` and pass its CMake toolchain file
+
+Build artifacts with:
+
+```sh
+uv build --sdist --wheel --out-dir dist
+```
+
+Then smoke-test the wheel in a clean virtual environment:
+
+```sh
+uv run python scripts/smoke_wheel.py dist/rubband-*.whl
+```
+
+Release builds are tag-driven. Pushing a `v*` tag runs the GitHub Actions
+workflow, builds platform artifacts, smoke-tests the wheel, writes checksums, and
+publishes a GitHub release.

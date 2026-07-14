@@ -1,7 +1,7 @@
 [project]
 name = "rubband"
 version = "0.1.0"
-description = "Add your description here"
+description = "Python bindings for Rubber Band audio pitch shifting and time stretching"
 readme = "README.md"
 license = "LGPL-2.1-only"
 authors = [
@@ -11,6 +11,12 @@ requires-python = ">=3.13"
 dependencies = [
     "numpy>=2.5.1",
     "pydantic>=2.13.4",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: C++",
+    "Topic :: Multimedia :: Sound/Audio",
 ]
 
 [project.scripts]
