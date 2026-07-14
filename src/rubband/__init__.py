@@ -4,11 +4,18 @@ import enum
 import sys
 from enum import StrEnum
 from functools import cached_property
+from threading import Lock
 from typing import Self, cast
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    PrivateAttr,
+    field_validator,
+    model_validator,
+)
 
 from . import _native
 
@@ -152,6 +159,8 @@ class RubberBandMetadata(BaseModel):
 class Stretcher(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
+    _lock: Lock = PrivateAttr(default_factory=Lock)
+
     sample_rate: int
     channels: int
     options: StretchOptions | None = None
@@ -196,16 +205,22 @@ class Stretcher(BaseModel):
         )
 
     def study(self, audio: NDArray[np.float32], final: bool = False) -> None:
-        self.native.study(_validate_stretcher_audio(audio, self.channels), final)
+        normalized = _validate_stretcher_audio(audio, self.channels)
+        with self._lock:
+            self.native.study(normalized, final)
 
     def process(self, audio: NDArray[np.float32], final: bool = False) -> None:
-        self.native.process(_validate_stretcher_audio(audio, self.channels), final)
+        normalized = _validate_stretcher_audio(audio, self.channels)
+        with self._lock:
+            self.native.process(normalized, final)
 
     def available(self) -> int:
-        return self.native.available()
+        with self._lock:
+            return self.native.available()
 
     def retrieve(self) -> NDArray[np.float32]:
-        result = self.native.retrieve()
+        with self._lock:
+            result = self.native.retrieve()
         _validate_result(result, self.channels)
         return result
 
