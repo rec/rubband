@@ -59,6 +59,37 @@ def test_native_pitch_shift_regression(file_regression: FileRegressionFixture) -
     )
 
 
+def test_native_stereo_outputs_have_matching_prefixes() -> None:
+    audio = np.ascontiguousarray(
+        np.column_stack(
+            (
+                sine_wave(seconds=1.0, hz=330.0),
+                sine_wave(seconds=1.0, hz=660.0),
+            )
+        ),
+        dtype=np.float32,
+    )
+
+    outputs = [
+        rubband.stretch(
+            audio,
+            sample_rate=SAMPLE_RATE,
+            time_ratio=1.25,
+            pitch_scale=2.0,
+        )
+        for _ in range(8)
+    ]
+    prefix_length = min(o.shape[0] for o in outputs)
+
+    assert prefix_length >= SAMPLE_RATE
+    for output in outputs:
+        assert output.shape[1] == 2
+        np.testing.assert_array_equal(
+            outputs[0][:prefix_length],
+            output[:prefix_length],
+        )
+
+
 def sine_wave(seconds: float, hz: float = 440.0) -> NDArray[np.float32]:
     frames = int(SAMPLE_RATE * seconds)
     return np.array(
