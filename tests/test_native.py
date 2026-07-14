@@ -102,6 +102,7 @@ def test_native_stereo_outputs_have_matching_prefixes() -> None:
         (12, "pianolead_pitch_up_12"),
     ],
 )
+@pytest.mark.long
 def test_native_pianolead_pitch_regression(
     semitones: int,
     basename: str,
