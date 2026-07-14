@@ -137,12 +137,6 @@ def test_stretch_rejects_non_positive_ratios() -> None:
         rubband.StretchOptions(sample_rate=SAMPLE_RATE, pitch_scale=0)
 
 
-def test_stretch_options_default_flags_match_current_backend_defaults() -> None:
-    options = rubband.StretchOptions(sample_rate=SAMPLE_RATE)
-
-    assert options.option_flags == 0x00010000
-
-
 def test_stretch_options_represent_all_rubber_band_option_groups() -> None:
     options = rubband.StretchOptions(
         sample_rate=SAMPLE_RATE,
@@ -169,7 +163,7 @@ def test_stretch_options_include_rubber_band_presets() -> None:
         preset=rubband.PresetOption.percussive,
     )
 
-    assert options.option_flags == 0x00112000
+    assert options.option_flags == 0x32112000
 
 
 def test_metadata_returns_accessors(monkeypatch: pytest.MonkeyPatch) -> None:

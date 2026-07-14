@@ -106,9 +106,9 @@ class StretchOptions(BaseModel):
     window: WindowOption = WindowOption.standard
     smoothing: SmoothingOption = SmoothingOption.off
     formant: FormantOption = FormantOption.shifted
-    pitch: PitchOption = PitchOption.high_speed
-    channels: ChannelsOption = ChannelsOption.apart
-    engine: EngineOption = EngineOption.faster
+    pitch: PitchOption = PitchOption.high_quality
+    channels: ChannelsOption = ChannelsOption.together
+    engine: EngineOption = EngineOption.finer
 
     @field_validator("sample_rate")
     @classmethod
