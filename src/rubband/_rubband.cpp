@@ -1,4 +1,4 @@
-#include <cmath>
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <stdexcept>
@@ -10,8 +10,8 @@
 
 namespace nb = nanobind;
 
-using AudioArray = nb::ndarray<nb::numpy, const float, nb::shape<-1, -1>, nb::c_contig>;
-using OutputArray = nb::ndarray<nb::numpy, float, nb::shape<-1, -1>, nb::c_contig>;
+using AudioArray = nb::ndarray<nb::numpy, const float, nb::shape<-1, -1>, nb::f_contig>;
+using OutputArray = nb::ndarray<nb::numpy, float, nb::shape<-1, -1>, nb::f_contig>;
 
 OutputArray stretch_float32(
     AudioArray audio,
@@ -21,18 +21,27 @@ OutputArray stretch_float32(
 ) {
     const size_t frames = audio.shape(0);
     const size_t channels = audio.shape(1);
+    if (frames < 1) {
+        throw std::runtime_error("expected at least one frame");
+    }
+    if (channels < 1 || channels > 256) {
+        throw std::runtime_error("expected audio shape (frames, channels)");
+    }
+    if (audio.stride(0) != 1) {
+        throw std::runtime_error("expected Fortran-order audio");
+    }
     const float *input = audio.data();
-
-    std::vector<std::vector<float>> planar(channels, std::vector<float>(frames));
-    for (size_t frame = 0; frame < frames; ++frame) {
-        for (size_t channel = 0; channel < channels; ++channel) {
-            planar[channel][frame] = input[frame * channels + channel];
-        }
+    std::vector<std::vector<float>> input_storage(channels);
+    for (size_t channel = 0; channel < channels; ++channel) {
+        input_storage[channel].assign(
+            input + channel * frames,
+            input + (channel + 1) * frames
+        );
     }
 
     std::vector<const float *> input_channels(channels);
     for (size_t channel = 0; channel < channels; ++channel) {
-        input_channels[channel] = planar[channel].data();
+        input_channels[channel] = input_storage[channel].data();
     }
 
     RubberBand::RubberBandStretcher stretcher(
@@ -70,10 +79,12 @@ OutputArray stretch_float32(
     nb::gil_scoped_acquire acquire;
 
     auto output = std::make_unique<std::vector<float>>(retrieved * channels);
-    for (size_t frame = 0; frame < retrieved; ++frame) {
-        for (size_t channel = 0; channel < channels; ++channel) {
-            (*output)[frame * channels + channel] = output_channels[channel][frame];
-        }
+    for (size_t channel = 0; channel < channels; ++channel) {
+        std::copy_n(
+            output_channels[channel].data(),
+            retrieved,
+            output->data() + channel * retrieved
+        );
     }
 
     float *data = output->data();
