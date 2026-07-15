@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import math
 import wave
+from array import array
 from pathlib import Path
 
 import numpy as np
@@ -75,6 +76,35 @@ def test_native_accepts_dlpack_audio() -> None:
     assert np.max(np.abs(result)) > 0.1
 
 
+def test_native_accepts_array_buffer_audio() -> None:
+    audio = array("f", sine_wave(seconds=1.0).tolist())
+
+    result = np.asarray(rubband.stretch(audio, SAMPLE_RATE))
+
+    assert result.shape == (SAMPLE_RATE,)
+    assert np.max(np.abs(result)) > 0.1
+
+
+def test_native_accepts_memoryview_audio() -> None:
+    audio = memoryview(array("f", sine_wave(seconds=1.0).tolist()))
+
+    result = np.asarray(rubband.stretch(audio, SAMPLE_RATE))
+
+    assert result.shape == (SAMPLE_RATE,)
+    assert np.max(np.abs(result)) > 0.1
+
+
+def test_native_stretch_returns_float32_memoryview() -> None:
+    result = rubband.stretch(sine_wave(seconds=1.0), SAMPLE_RATE)
+
+    assert isinstance(result, memoryview)
+    assert result.format == "f"
+    assert result.itemsize == 4
+    assert result.ndim == 1
+    assert result.shape == (SAMPLE_RATE,)
+    assert result.c_contiguous
+
+
 def test_native_stretcher_regression(file_regression: FileRegressionFixture) -> None:
     audio = sine_wave(seconds=1.0)
     stretcher = rubband.Stretcher(SAMPLE_RATE, 1)
@@ -90,6 +120,22 @@ def test_native_stretcher_regression(file_regression: FileRegressionFixture) -> 
         extension=".wav",
         binary=True,
     )
+
+
+def test_native_stretcher_retrieve_returns_rank_two_float32_memoryview() -> None:
+    audio = sine_wave(seconds=1.0)
+    stretcher = rubband.Stretcher(SAMPLE_RATE, 1)
+
+    stretcher.study(audio, final=True)
+    stretcher.process(audio, final=True)
+    result = stretcher.retrieve()
+
+    assert isinstance(result, memoryview)
+    assert result.format == "f"
+    assert result.itemsize == 4
+    assert result.ndim == 2
+    assert result.shape == (SAMPLE_RATE, 1)
+    assert result.c_contiguous
 
 
 def test_native_stretcher_accepts_dynamic_ratio_setters() -> None:
@@ -240,7 +286,11 @@ class DLPackAudio:
     def __init__(self, audio: NDArray[np.float32]) -> None:
         self.audio = audio
 
-    def __dlpack__(self, stream: object = None, max_version: object = None) -> object:
+    def __dlpack__(
+        self,
+        stream: object = None,
+        max_version: tuple[int, int] | None = None,
+    ) -> object:
         return self.audio.__dlpack__(stream=stream, max_version=max_version)
 
     def __dlpack_device__(self) -> tuple[int, int]:
