@@ -35,3 +35,11 @@ def test_cmake_has_non_pkg_config_rubber_band_fallback() -> None:
     assert "find_path(RUBBERBAND_INCLUDE_DIR rubberband/RubberBandStretcher.h)" in cmake
     assert "find_library(RUBBERBAND_LIBRARY" in cmake
     assert "CMAKE_PREFIX_PATH, or vcpkg" in cmake
+
+
+def test_api_docs_do_not_expose_native_internals() -> None:
+    api = Path("docs/api.md").read_text()
+
+    assert "rubband._native" not in api
+    assert "rubband._rubband" not in api
+    assert "stretch_float32" not in api
