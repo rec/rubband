@@ -57,54 +57,100 @@ This page is generated from the public Python API in `rubband`.
 
 ## Option Enums
 
-::: rubband.ProcessOption
-    options:
-      heading_level: 3
+The enum values below map directly to Rubber Band option groups.
 
-::: rubband.StretchOption
-    options:
-      heading_level: 3
+### `PresetOption`
 
-::: rubband.TransientsOption
-    options:
-      heading_level: 3
+| Value | Meaning |
+| --- | --- |
+| `default` | Use explicit option values. |
+| `percussive` | Apply Rubber Band's percussive preset. |
 
-::: rubband.DetectorOption
-    options:
-      heading_level: 3
+### `ProcessOption`
 
-::: rubband.PhaseOption
-    options:
-      heading_level: 3
+| Value | Meaning |
+| --- | --- |
+| `offline` | Offline processing. Time and pitch ratios are fixed after `study()` or `process()` starts. |
+| `real_time` | Real-time processing. Time and pitch ratios may change while processing. |
 
-::: rubband.ThreadingOption
-    options:
-      heading_level: 3
+### `StretchOption`
 
-::: rubband.WindowOption
-    options:
-      heading_level: 3
+| Value | Meaning |
+| --- | --- |
+| `elastic` | Standard Rubber Band elastic stretching. |
+| `precise` | Prefer precise stretching behavior. |
 
-::: rubband.SmoothingOption
-    options:
-      heading_level: 3
+### `TransientsOption`
 
-::: rubband.FormantOption
-    options:
-      heading_level: 3
+| Value | Meaning |
+| --- | --- |
+| `crisp` | Preserve transients more sharply. |
+| `mixed` | Balance transient preservation and smoothing. |
+| `smooth` | Smooth transients more heavily. |
 
-::: rubband.PitchOption
-    options:
-      heading_level: 3
+### `DetectorOption`
 
-::: rubband.ChannelsOption
-    options:
-      heading_level: 3
+| Value | Meaning |
+| --- | --- |
+| `compound` | Use Rubber Band's compound transient detector. |
+| `percussive` | Tune detection for percussive material. |
+| `soft` | Tune detection for softer material. |
 
-::: rubband.EngineOption
-    options:
-      heading_level: 3
+### `PhaseOption`
 
-::: rubband.PresetOption
-    options:
-      heading_level: 3
+| Value | Meaning |
+| --- | --- |
+| `laminar` | Keep phase behavior more coherent. |
+| `independent` | Allow channels or components to phase independently. |
+
+### `ThreadingOption`
+
+| Value | Meaning |
+| --- | --- |
+| `auto` | Let Rubber Band choose threading behavior. |
+| `never` | Disable Rubber Band's internal threading. |
+| `always` | Enable Rubber Band's internal threading. |
+
+### `WindowOption`
+
+| Value | Meaning |
+| --- | --- |
+| `standard` | Use the standard analysis window. |
+| `short` | Use a shorter analysis window. |
+| `long` | Use a longer analysis window. |
+
+### `SmoothingOption`
+
+| Value | Meaning |
+| --- | --- |
+| `off` | Disable Rubber Band's smoothing option. |
+| `on` | Enable Rubber Band's smoothing option. |
+
+### `FormantOption`
+
+| Value | Meaning |
+| --- | --- |
+| `shifted` | Shift formants with pitch. |
+| `preserved` | Preserve formants while shifting pitch. |
+
+### `PitchOption`
+
+| Value | Meaning |
+| --- | --- |
+| `high_speed` | Prefer faster pitch processing. |
+| `high_quality` | Prefer higher quality pitch processing. |
+| `high_consistency` | Prefer more consistent pitch processing. |
+
+### `ChannelsOption`
+
+| Value | Meaning |
+| --- | --- |
+| `apart` | Process channels separately. |
+| `together` | Process channels together. |
+
+### `EngineOption`
+
+| Value | Meaning |
+| --- | --- |
+| `faster` | Use Rubber Band's faster engine. |
+| `finer` | Use Rubber Band's finer engine. |
