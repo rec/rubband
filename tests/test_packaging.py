@@ -36,6 +36,12 @@ def test_release_script_builds_and_smokes_wheel() -> None:
     assert "git tag" in script
 
 
+def test_scikit_build_uses_persistent_build_dir() -> None:
+    pyproject = Path("pyproject.toml").read_text()
+
+    assert 'build-dir = "build/scikit-build/{state}/{wheel_tag}"' in pyproject
+
+
 def test_cmake_has_non_pkg_config_rubber_band_fallback() -> None:
     cmake = Path("CMakeLists.txt").read_text()
 

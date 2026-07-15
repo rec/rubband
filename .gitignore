@@ -1,6 +1,7 @@
 .pytest_cache/
 .ruff_cache/
 .venv/
+build/
 dist/
 site/
 __pycache__/
