@@ -2,6 +2,8 @@
 
 Python bindings for Rubber Band audio pitch shifting and time stretching.
 
+Documentation: https://rec.github.io/rubband/
+
 The current API is NumPy-only:
 
 ```python

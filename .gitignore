@@ -2,5 +2,6 @@
 .ruff_cache/
 .venv/
 dist/
+site/
 __pycache__/
 *.py[cod]

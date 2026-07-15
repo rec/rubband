@@ -91,6 +91,13 @@ class PresetOption(StrEnum):
 
 
 class Options(BaseModel):
+    """Rubber Band option flags for constructing a stretcher.
+
+    Time and pitch ratios are not options in Rubber Band itself. Pass them to
+    `stretch()` or to `Stretcher` as `initial_time_ratio` and
+    `initial_pitch_scale`.
+    """
+
     model_config = ConfigDict(frozen=True)
 
     preset: PresetOption = PresetOption.default
@@ -127,6 +134,8 @@ class Options(BaseModel):
 
 
 class RubberBandMetadata(BaseModel):
+    """Read-only values reported by a configured Rubber Band stretcher."""
+
     model_config = ConfigDict(frozen=True)
 
     engine_version: int
@@ -138,6 +147,8 @@ class RubberBandMetadata(BaseModel):
 
 
 class Stretcher(BaseModel):
+    """Stateful Rubber Band stretcher for offline or real-time processing."""
+
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     _lock: Lock = PrivateAttr(default_factory=Lock)
@@ -207,17 +218,20 @@ class Stretcher(BaseModel):
             self._started = True
 
     def reset(self) -> None:
+        """Reset Rubber Band's internal buffers while retaining current ratios."""
         with self._lock:
             self.native.reset()
             self._started = False
 
     def set_time_ratio(self, ratio: float) -> None:
+        """Set stretched-to-unstretched duration ratio."""
         ratio = _validate_positive_ratio(ratio)
         with self._lock:
             self._validate_dynamic_ratio_change()
             self.native.set_time_ratio(ratio)
 
     def set_pitch_scale(self, scale: float) -> None:
+        """Set target-to-source frequency ratio."""
         scale = _validate_positive_ratio(scale)
         with self._lock:
             self._validate_dynamic_ratio_change()
@@ -329,7 +343,7 @@ def stretch(
     pitch_scale: float = 1.0,
     options: Options | None = None,
 ) -> NDArray[np.float32]:
-    """Stretch and pitch-shift CPU NumPy audio with Rubber Band.
+    """Stretch and pitch-shift CPU NumPy audio in one offline call.
 
     Input must be float32 NumPy audio with shape ``(frames,)`` for mono or
     ``(frames, channels)`` for multichannel audio. It must be C-contiguous.
@@ -359,6 +373,7 @@ def metadata(
     pitch_scale: float = 1.0,
     options: Options | None = None,
 ) -> RubberBandMetadata:
+    """Return metadata for a Rubber Band stretcher configuration."""
     sample_rate = _validate_sample_rate(sample_rate)
     time_ratio = _validate_positive_ratio(time_ratio)
     pitch_scale = _validate_positive_ratio(pitch_scale)
