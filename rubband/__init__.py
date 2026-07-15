@@ -6,7 +6,7 @@ import sys
 from enum import StrEnum
 from functools import cached_property
 from threading import Lock
-from typing import Self, cast
+from typing import cast
 
 import numpy as np
 from numpy.typing import NDArray
@@ -15,7 +15,6 @@ from pydantic import (
     ConfigDict,
     PrivateAttr,
     field_validator,
-    model_validator,
 )
 
 from . import _native
@@ -91,12 +90,9 @@ class PresetOption(StrEnum):
     percussive = enum.auto()
 
 
-class StretchOptions(BaseModel):
+class Options(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    sample_rate: int
-    time_ratio: float = 1.0
-    pitch_scale: float = 1.0
     preset: PresetOption = PresetOption.default
     process: ProcessOption = ProcessOption.offline
     stretch: StretchOption = StretchOption.elastic
@@ -110,22 +106,6 @@ class StretchOptions(BaseModel):
     pitch: PitchOption = PitchOption.high_quality
     channels: ChannelsOption = ChannelsOption.together
     engine: EngineOption = EngineOption.finer
-
-    @field_validator("sample_rate")
-    @classmethod
-    def validate_sample_rate(cls, value: int) -> int:
-        if isinstance(value, bool):
-            raise TypeError("sample_rate must be an integer")
-        if value < 8000 or value > 192000:
-            raise ValueError("sample_rate must be between 8000 and 192000")
-        return value
-
-    @field_validator("time_ratio", "pitch_scale")
-    @classmethod
-    def validate_positive_ratio(cls, value: float) -> float:
-        if not math.isfinite(value) or value <= 0:
-            raise ValueError("ratio must be finite and greater than zero")
-        return value
 
     @property
     def option_flags(self) -> int:
@@ -165,20 +145,30 @@ class Stretcher(BaseModel):
 
     sample_rate: int
     channels: int
-    options: StretchOptions | None = None
+    options: Options = Options()
+    initial_time_ratio: float = 1.0
+    initial_pitch_scale: float = 1.0
 
     def __init__(
         self,
         sample_rate: int,
         channels: int,
-        options: StretchOptions | None = None,
+        options: Options | None = None,
+        initial_time_ratio: float = 1.0,
+        initial_pitch_scale: float = 1.0,
     ) -> None:
-        super().__init__(sample_rate=sample_rate, channels=channels, options=options)
+        super().__init__(
+            sample_rate=sample_rate,
+            channels=channels,
+            options=options or Options(),
+            initial_time_ratio=initial_time_ratio,
+            initial_pitch_scale=initial_pitch_scale,
+        )
 
     @field_validator("sample_rate")
     @classmethod
     def validate_sample_rate(cls, value: int) -> int:
-        return StretchOptions.validate_sample_rate(value)
+        return _validate_sample_rate(value)
 
     @field_validator("channels")
     @classmethod
@@ -189,21 +179,19 @@ class Stretcher(BaseModel):
             raise ValueError("channels must be between 1 and 256")
         return value
 
-    @model_validator(mode="after")
-    def validate_options(self) -> Self:
-        if self.options is not None and self.options.sample_rate != self.sample_rate:
-            raise ValueError("options sample_rate must match stretcher sample_rate")
-        return self
+    @field_validator("initial_time_ratio", "initial_pitch_scale")
+    @classmethod
+    def validate_initial_ratio(cls, value: float) -> float:
+        return _validate_positive_ratio(value)
 
     @cached_property
     def native(self) -> _native.Stretcher:
-        options = self.options or StretchOptions(sample_rate=self.sample_rate)
         return _native.Stretcher(
             self.sample_rate,
             self.channels,
-            options.time_ratio,
-            options.pitch_scale,
-            options.option_flags,
+            self.initial_time_ratio,
+            self.initial_pitch_scale,
+            self.options.option_flags,
         )
 
     def study(self, audio: NDArray[np.float32], final: bool = False) -> None:
@@ -218,17 +206,100 @@ class Stretcher(BaseModel):
             self.native.process(normalized, final)
             self._started = True
 
+    def reset(self) -> None:
+        with self._lock:
+            self.native.reset()
+            self._started = False
+
     def set_time_ratio(self, ratio: float) -> None:
-        ratio = StretchOptions.validate_positive_ratio(ratio)
+        ratio = _validate_positive_ratio(ratio)
         with self._lock:
             self._validate_dynamic_ratio_change()
             self.native.set_time_ratio(ratio)
 
     def set_pitch_scale(self, scale: float) -> None:
-        scale = StretchOptions.validate_positive_ratio(scale)
+        scale = _validate_positive_ratio(scale)
         with self._lock:
             self._validate_dynamic_ratio_change()
             self.native.set_pitch_scale(scale)
+
+    def set_formant_scale(self, scale: float) -> None:
+        scale = _validate_non_negative_ratio(scale)
+        with self._lock:
+            self.native.set_formant_scale(scale)
+
+    def set_transients_option(self, option: TransientsOption) -> None:
+        self._validate_real_time_option_change("transients option")
+        with self._lock:
+            self.native.set_transients_option(_TRANSIENTS_OPTIONS[option])
+
+    def set_detector_option(self, option: DetectorOption) -> None:
+        self._validate_real_time_option_change("detector option")
+        with self._lock:
+            self.native.set_detector_option(_DETECTOR_OPTIONS[option])
+
+    def set_phase_option(self, option: PhaseOption) -> None:
+        with self._lock:
+            self.native.set_phase_option(_PHASE_OPTIONS[option])
+
+    def set_formant_option(self, option: FormantOption) -> None:
+        with self._lock:
+            self.native.set_formant_option(_FORMANT_OPTIONS[option])
+
+    def set_pitch_option(self, option: PitchOption) -> None:
+        self._validate_real_time_option_change("pitch option")
+        with self._lock:
+            self.native.set_pitch_option(_PITCH_OPTIONS[option])
+
+    def get_time_ratio(self) -> float:
+        with self._lock:
+            return self.native.get_time_ratio()
+
+    def get_pitch_scale(self) -> float:
+        with self._lock:
+            return self.native.get_pitch_scale()
+
+    def get_formant_scale(self) -> float:
+        with self._lock:
+            return self.native.get_formant_scale()
+
+    def get_preferred_start_pad(self) -> int:
+        with self._lock:
+            return self.native.get_preferred_start_pad()
+
+    def get_start_delay(self) -> int:
+        with self._lock:
+            return self.native.get_start_delay()
+
+    def get_latency(self) -> int:
+        with self._lock:
+            return self.native.get_latency()
+
+    def get_channel_count(self) -> int:
+        with self._lock:
+            return self.native.get_channel_count()
+
+    def set_expected_input_duration(self, samples: int) -> None:
+        samples = _validate_sample_count(samples)
+        with self._lock:
+            self.native.set_expected_input_duration(samples)
+
+    def set_max_process_size(self, samples: int) -> None:
+        samples = _validate_sample_count(samples)
+        with self._lock:
+            if self._started:
+                raise ValueError(
+                    "max process size cannot be changed after study or process"
+                )
+            self.native.set_max_process_size(samples)
+
+    def get_process_size_limit(self) -> int:
+        with self._lock:
+            return self.native.get_process_size_limit()
+
+    def get_samples_required(self) -> int:
+        with self._lock:
+            return self.native.get_samples_required()
 
     def available(self) -> int:
         with self._lock:
@@ -241,29 +312,39 @@ class Stretcher(BaseModel):
         return result
 
     def _validate_dynamic_ratio_change(self) -> None:
-        options = self.options or StretchOptions(sample_rate=self.sample_rate)
-        if options.process == ProcessOption.offline and self._started:
+        if self.options.process == ProcessOption.offline and self._started:
             raise ValueError(
                 "offline stretchers cannot change ratios after study or process"
             )
 
+    def _validate_real_time_option_change(self, name: str) -> None:
+        if self.options.process == ProcessOption.offline:
+            raise ValueError(f"{name} cannot be changed in offline mode")
+
 
 def stretch(
     audio: NDArray[np.float32],
-    options: StretchOptions,
+    sample_rate: int,
+    time_ratio: float = 1.0,
+    pitch_scale: float = 1.0,
+    options: Options | None = None,
 ) -> NDArray[np.float32]:
     """Stretch and pitch-shift CPU NumPy audio with Rubber Band.
 
     Input must be float32 NumPy audio with shape ``(frames,)`` for mono or
     ``(frames, channels)`` for multichannel audio. It must be C-contiguous.
     """
+    sample_rate = _validate_sample_rate(sample_rate)
+    time_ratio = _validate_positive_ratio(time_ratio)
+    pitch_scale = _validate_positive_ratio(pitch_scale)
+    resolved_options = options or Options()
     normalized, mono = _validate_audio(audio)
     result = _native.stretch_float32(
         normalized,
-        options.sample_rate,
-        options.time_ratio,
-        options.pitch_scale,
-        options.option_flags,
+        sample_rate,
+        time_ratio,
+        pitch_scale,
+        resolved_options.option_flags,
     )
     _validate_result(result, normalized.shape[1])
     if mono:
@@ -271,20 +352,59 @@ def stretch(
     return result
 
 
-def metadata(options: StretchOptions, channels: int = 1) -> RubberBandMetadata:
+def metadata(
+    sample_rate: int,
+    channels: int = 1,
+    time_ratio: float = 1.0,
+    pitch_scale: float = 1.0,
+    options: Options | None = None,
+) -> RubberBandMetadata:
+    sample_rate = _validate_sample_rate(sample_rate)
+    time_ratio = _validate_positive_ratio(time_ratio)
+    pitch_scale = _validate_positive_ratio(pitch_scale)
+    resolved_options = options or Options()
+    Stretcher.validate_channels(channels)
     return RubberBandMetadata.model_validate(
         _native.metadata(
-            options.sample_rate,
+            sample_rate,
             channels,
-            options.time_ratio,
-            options.pitch_scale,
-            options.option_flags,
+            time_ratio,
+            pitch_scale,
+            resolved_options.option_flags,
         )
     )
 
 
 def main() -> None:
     sys.exit("rubband does not provide a command line interface yet.")
+
+
+def _validate_sample_rate(value: int) -> int:
+    if isinstance(value, bool):
+        raise TypeError("sample_rate must be an integer")
+    if value < 8000 or value > 192000:
+        raise ValueError("sample_rate must be between 8000 and 192000")
+    return value
+
+
+def _validate_positive_ratio(value: float) -> float:
+    if not math.isfinite(value) or value <= 0:
+        raise ValueError("ratio must be finite and greater than zero")
+    return value
+
+
+def _validate_non_negative_ratio(value: float) -> float:
+    if not math.isfinite(value) or value < 0:
+        raise ValueError("ratio must be finite and non-negative")
+    return value
+
+
+def _validate_sample_count(value: int) -> int:
+    if isinstance(value, bool):
+        raise TypeError("sample count must be an integer")
+    if value < 0:
+        raise ValueError("sample count must be non-negative")
+    return value
 
 
 def _validate_audio(audio: object) -> tuple[NDArray[np.float32], bool]:

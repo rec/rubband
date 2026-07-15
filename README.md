@@ -9,11 +9,9 @@ import rubband
 
 shifted = rubband.stretch(
     audio,
-    rubband.StretchOptions(
-        sample_rate=48_000,
-        time_ratio=1.25,
-        pitch_scale=1.0,
-    ),
+    48_000,
+    time_ratio=1.25,
+    pitch_scale=1.0,
 )
 ```
 
@@ -23,10 +21,11 @@ For stateful processing, use `Stretcher`:
 stretcher = rubband.Stretcher(
     48_000,
     2,
-    options=rubband.StretchOptions(
-        sample_rate=48_000,
+    options=rubband.Options(
         process=rubband.ProcessOption.real_time,
     ),
+    initial_time_ratio=1.0,
+    initial_pitch_scale=1.0,
 )
 stretcher.process(audio, final=False)
 stretcher.set_pitch_scale(2.0)
@@ -36,6 +35,13 @@ stretcher.set_time_ratio(0.75)
 Dynamic `set_pitch_scale()` and `set_time_ratio()` changes are intended for
 real-time processing. In offline mode, call them before `study()` or
 `process()`; after either call, rubband raises `ValueError`.
+
+`Stretcher` also exposes original Rubber Band lifecycle and query methods such
+as `reset()`, `get_time_ratio()`, `get_pitch_scale()`,
+`get_preferred_start_pad()`, `get_start_delay()`, `get_channel_count()`,
+`set_expected_input_duration()`, `set_max_process_size()`,
+`get_samples_required()`, `set_transients_option()`, `set_detector_option()`,
+`set_phase_option()`, `set_formant_option()`, and `set_pitch_option()`.
 
 Input constraints:
 

@@ -13,9 +13,45 @@ class _NativeStretcher(Protocol):
 
     def process(self, audio: NDArray[np.float32], final: bool) -> None: ...
 
+    def reset(self) -> None: ...
+
     def set_time_ratio(self, ratio: float) -> None: ...
 
     def set_pitch_scale(self, scale: float) -> None: ...
+
+    def set_formant_scale(self, scale: float) -> None: ...
+
+    def set_transients_option(self, options: int) -> None: ...
+
+    def set_detector_option(self, options: int) -> None: ...
+
+    def set_phase_option(self, options: int) -> None: ...
+
+    def set_formant_option(self, options: int) -> None: ...
+
+    def set_pitch_option(self, options: int) -> None: ...
+
+    def get_time_ratio(self) -> float: ...
+
+    def get_pitch_scale(self) -> float: ...
+
+    def get_formant_scale(self) -> float: ...
+
+    def get_preferred_start_pad(self) -> int: ...
+
+    def get_start_delay(self) -> int: ...
+
+    def get_latency(self) -> int: ...
+
+    def get_channel_count(self) -> int: ...
+
+    def set_expected_input_duration(self, samples: int) -> None: ...
+
+    def set_max_process_size(self, samples: int) -> None: ...
+
+    def get_process_size_limit(self) -> int: ...
+
+    def get_samples_required(self) -> int: ...
 
     def available(self) -> int: ...
 
@@ -85,11 +121,65 @@ class Stretcher:
     def process(self, audio: NDArray[np.float32], final: bool) -> None:
         self.handle.process(np.asarray(audio, dtype=np.float32, order="F"), final)
 
+    def reset(self) -> None:
+        self.handle.reset()
+
     def set_time_ratio(self, ratio: float) -> None:
         self.handle.set_time_ratio(ratio)
 
     def set_pitch_scale(self, scale: float) -> None:
         self.handle.set_pitch_scale(scale)
+
+    def set_formant_scale(self, scale: float) -> None:
+        self.handle.set_formant_scale(scale)
+
+    def set_transients_option(self, options: int) -> None:
+        self.handle.set_transients_option(options)
+
+    def set_detector_option(self, options: int) -> None:
+        self.handle.set_detector_option(options)
+
+    def set_phase_option(self, options: int) -> None:
+        self.handle.set_phase_option(options)
+
+    def set_formant_option(self, options: int) -> None:
+        self.handle.set_formant_option(options)
+
+    def set_pitch_option(self, options: int) -> None:
+        self.handle.set_pitch_option(options)
+
+    def get_time_ratio(self) -> float:
+        return self.handle.get_time_ratio()
+
+    def get_pitch_scale(self) -> float:
+        return self.handle.get_pitch_scale()
+
+    def get_formant_scale(self) -> float:
+        return self.handle.get_formant_scale()
+
+    def get_preferred_start_pad(self) -> int:
+        return self.handle.get_preferred_start_pad()
+
+    def get_start_delay(self) -> int:
+        return self.handle.get_start_delay()
+
+    def get_latency(self) -> int:
+        return self.handle.get_latency()
+
+    def get_channel_count(self) -> int:
+        return self.handle.get_channel_count()
+
+    def set_expected_input_duration(self, samples: int) -> None:
+        self.handle.set_expected_input_duration(samples)
+
+    def set_max_process_size(self, samples: int) -> None:
+        self.handle.set_max_process_size(samples)
+
+    def get_process_size_limit(self) -> int:
+        return self.handle.get_process_size_limit()
+
+    def get_samples_required(self) -> int:
+        return self.handle.get_samples_required()
 
     def available(self) -> int:
         return self.handle.available()

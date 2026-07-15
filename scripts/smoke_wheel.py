@@ -13,7 +13,7 @@ def smoke_installed_package() -> None:
     import rubband
 
     audio = np.zeros(48_000, dtype=np.float32)
-    out = rubband.stretch(audio, rubband.StretchOptions(sample_rate=48_000))
+    out = rubband.stretch(audio, 48_000)
     assert out.dtype == np.float32
     assert out.ndim == 1
     assert out.shape[0] >= 48_000

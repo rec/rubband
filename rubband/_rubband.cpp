@@ -124,12 +124,84 @@ public:
         stretcher_.process(input_channels.data(), audio.shape(0), final);
     }
 
+    void reset() {
+        stretcher_.reset();
+    }
+
     void set_time_ratio(double ratio) {
         stretcher_.setTimeRatio(ratio);
     }
 
     void set_pitch_scale(double scale) {
         stretcher_.setPitchScale(scale);
+    }
+
+    void set_formant_scale(double scale) {
+        stretcher_.setFormantScale(scale);
+    }
+
+    void set_transients_option(int options) {
+        stretcher_.setTransientsOption(options);
+    }
+
+    void set_detector_option(int options) {
+        stretcher_.setDetectorOption(options);
+    }
+
+    void set_phase_option(int options) {
+        stretcher_.setPhaseOption(options);
+    }
+
+    void set_formant_option(int options) {
+        stretcher_.setFormantOption(options);
+    }
+
+    void set_pitch_option(int options) {
+        stretcher_.setPitchOption(options);
+    }
+
+    double get_time_ratio() const {
+        return stretcher_.getTimeRatio();
+    }
+
+    double get_pitch_scale() const {
+        return stretcher_.getPitchScale();
+    }
+
+    double get_formant_scale() const {
+        return stretcher_.getFormantScale();
+    }
+
+    size_t get_preferred_start_pad() const {
+        return stretcher_.getPreferredStartPad();
+    }
+
+    size_t get_start_delay() const {
+        return stretcher_.getStartDelay();
+    }
+
+    size_t get_latency() const {
+        return stretcher_.getLatency();
+    }
+
+    size_t get_channel_count() const {
+        return stretcher_.getChannelCount();
+    }
+
+    void set_expected_input_duration(size_t samples) {
+        stretcher_.setExpectedInputDuration(samples);
+    }
+
+    void set_max_process_size(size_t samples) {
+        stretcher_.setMaxProcessSize(samples);
+    }
+
+    size_t get_process_size_limit() const {
+        return stretcher_.getProcessSizeLimit();
+    }
+
+    size_t get_samples_required() const {
+        return stretcher_.getSamplesRequired();
     }
 
     int available() const {
@@ -219,8 +291,38 @@ NB_MODULE(_rubband, module) {
         )
         .def("study", &Stretcher::study, nb::arg("audio"), nb::arg("final") = false)
         .def("process", &Stretcher::process, nb::arg("audio"), nb::arg("final") = false)
+        .def("reset", &Stretcher::reset)
         .def("set_time_ratio", &Stretcher::set_time_ratio, nb::arg("ratio"))
         .def("set_pitch_scale", &Stretcher::set_pitch_scale, nb::arg("scale"))
+        .def("set_formant_scale", &Stretcher::set_formant_scale, nb::arg("scale"))
+        .def(
+            "set_transients_option",
+            &Stretcher::set_transients_option,
+            nb::arg("options")
+        )
+        .def("set_detector_option", &Stretcher::set_detector_option, nb::arg("options"))
+        .def("set_phase_option", &Stretcher::set_phase_option, nb::arg("options"))
+        .def("set_formant_option", &Stretcher::set_formant_option, nb::arg("options"))
+        .def("set_pitch_option", &Stretcher::set_pitch_option, nb::arg("options"))
+        .def("get_time_ratio", &Stretcher::get_time_ratio)
+        .def("get_pitch_scale", &Stretcher::get_pitch_scale)
+        .def("get_formant_scale", &Stretcher::get_formant_scale)
+        .def("get_preferred_start_pad", &Stretcher::get_preferred_start_pad)
+        .def("get_start_delay", &Stretcher::get_start_delay)
+        .def("get_latency", &Stretcher::get_latency)
+        .def("get_channel_count", &Stretcher::get_channel_count)
+        .def(
+            "set_expected_input_duration",
+            &Stretcher::set_expected_input_duration,
+            nb::arg("samples")
+        )
+        .def(
+            "set_max_process_size",
+            &Stretcher::set_max_process_size,
+            nb::arg("samples")
+        )
+        .def("get_process_size_limit", &Stretcher::get_process_size_limit)
+        .def("get_samples_required", &Stretcher::get_samples_required)
         .def("available", &Stretcher::available)
         .def("retrieve", &Stretcher::retrieve);
 

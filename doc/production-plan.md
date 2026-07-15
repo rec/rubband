@@ -23,11 +23,10 @@ Keep the basic practical API:
 ```python
 rubband.stretch(
     audio,
-    rubband.StretchOptions(
-        sample_rate=sample_rate,
-        time_ratio=1.0,
-        pitch_scale=1.0,
-    ),
+    sample_rate,
+    time_ratio=1.0,
+    pitch_scale=1.0,
+    options=rubband.Options(),
 )
 ```
 

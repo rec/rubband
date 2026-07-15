@@ -32,25 +32,16 @@ def test_stretch_accepts_one_second_mono_audio(
         assert sample_rate == SAMPLE_RATE
         assert time_ratio == 1.25
         assert pitch_scale == 0.5
-        assert (
-            option_flags
-            == rubband.StretchOptions(
-                sample_rate=SAMPLE_RATE,
-                time_ratio=1.25,
-                pitch_scale=0.5,
-            ).option_flags
-        )
+        assert option_flags == rubband.Options().option_flags
         return backend_audio.copy()
 
     monkeypatch.setattr(_native, "stretch_float32", stretch_float32)
 
     result = rubband.stretch(
         audio,
-        rubband.StretchOptions(
-            sample_rate=SAMPLE_RATE,
-            time_ratio=1.25,
-            pitch_scale=0.5,
-        ),
+        SAMPLE_RATE,
+        time_ratio=1.25,
+        pitch_scale=0.5,
     )
 
     assert result.shape == (SAMPLE_RATE,)
@@ -77,20 +68,15 @@ def test_stretch_accepts_one_second_stereo_audio(
         assert sample_rate == SAMPLE_RATE
         assert time_ratio == 1.0
         assert pitch_scale == 2.0
-        assert (
-            option_flags
-            == rubband.StretchOptions(
-                sample_rate=SAMPLE_RATE,
-                pitch_scale=2.0,
-            ).option_flags
-        )
+        assert option_flags == rubband.Options().option_flags
         return backend_audio.copy()
 
     monkeypatch.setattr(_native, "stretch_float32", stretch_float32)
 
     result = rubband.stretch(
         np.ascontiguousarray(audio, dtype=np.float32),
-        rubband.StretchOptions(sample_rate=SAMPLE_RATE, pitch_scale=2.0),
+        SAMPLE_RATE,
+        pitch_scale=2.0,
     )
 
     assert result.shape == (SAMPLE_RATE, 2)
@@ -105,7 +91,7 @@ def test_stretch_rejects_non_numpy_audio() -> None:
     with pytest.raises(TypeError, match="NumPy ndarray"):
         rubband.stretch(
             [0.0],  # type: ignore[arg-type]
-            rubband.StretchOptions(sample_rate=SAMPLE_RATE),
+            SAMPLE_RATE,
         )
 
 
@@ -115,7 +101,7 @@ def test_stretch_rejects_non_float32_audio() -> None:
     with pytest.raises(TypeError, match="float32"):
         rubband.stretch(
             audio,  # type: ignore[arg-type]
-            rubband.StretchOptions(sample_rate=SAMPLE_RATE),
+            SAMPLE_RATE,
         )
 
 
@@ -123,24 +109,27 @@ def test_stretch_rejects_non_contiguous_audio() -> None:
     audio = np.zeros((SAMPLE_RATE, 2), dtype=np.float32)[::2]
 
     with pytest.raises(ValueError, match="C-contiguous"):
-        rubband.stretch(audio, rubband.StretchOptions(sample_rate=SAMPLE_RATE))
+        rubband.stretch(audio, SAMPLE_RATE)
 
 
 def test_stretch_rejects_out_of_range_sample_rate() -> None:
     with pytest.raises(ValueError, match="between 8000 and 192000"):
-        rubband.StretchOptions(sample_rate=7999)
+        rubband.Stretcher(7999, 1)
 
 
 def test_stretch_rejects_non_positive_ratios() -> None:
     with pytest.raises(ValueError, match="ratio"):
-        rubband.StretchOptions(sample_rate=SAMPLE_RATE, time_ratio=0)
+        rubband.stretch(
+            np.zeros(SAMPLE_RATE, dtype=np.float32),
+            SAMPLE_RATE,
+            time_ratio=0,
+        )
     with pytest.raises(ValueError, match="ratio"):
-        rubband.StretchOptions(sample_rate=SAMPLE_RATE, pitch_scale=0)
+        rubband.Stretcher(SAMPLE_RATE, 1, initial_pitch_scale=0)
 
 
 def test_stretch_options_represent_all_rubber_band_option_groups() -> None:
-    options = rubband.StretchOptions(
-        sample_rate=SAMPLE_RATE,
+    options = rubband.Options(
         process=rubband.ProcessOption.real_time,
         stretch=rubband.StretchOption.precise,
         transients=rubband.TransientsOption.smooth,
@@ -159,8 +148,7 @@ def test_stretch_options_represent_all_rubber_band_option_groups() -> None:
 
 
 def test_stretch_options_include_rubber_band_presets() -> None:
-    options = rubband.StretchOptions(
-        sample_rate=SAMPLE_RATE,
+    options = rubband.Options(
         preset=rubband.PresetOption.percussive,
     )
 
@@ -168,11 +156,7 @@ def test_stretch_options_include_rubber_band_presets() -> None:
 
 
 def test_metadata_returns_accessors(monkeypatch: pytest.MonkeyPatch) -> None:
-    options = rubband.StretchOptions(
-        sample_rate=SAMPLE_RATE,
-        time_ratio=1.25,
-        pitch_scale=2.0,
-    )
+    options = rubband.Options()
 
     def metadata(
         sample_rate: int,
@@ -197,7 +181,13 @@ def test_metadata_returns_accessors(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(_native, "metadata", metadata)
 
-    result = rubband.metadata(options, channels=2)
+    result = rubband.metadata(
+        SAMPLE_RATE,
+        channels=2,
+        time_ratio=1.25,
+        pitch_scale=2.0,
+        options=options,
+    )
 
     assert result == rubband.RubberBandMetadata(
         engine_version=2,
@@ -212,11 +202,7 @@ def test_metadata_returns_accessors(monkeypatch: pytest.MonkeyPatch) -> None:
 def test_stretcher_mirrors_streaming_lifecycle(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    options = rubband.StretchOptions(
-        sample_rate=SAMPLE_RATE,
-        time_ratio=1.25,
-        pitch_scale=2.0,
-    )
+    options = rubband.Options()
 
     class NativeStretcher:
         def __init__(
@@ -253,6 +239,46 @@ def test_stretcher_mirrors_streaming_lifecycle(
         def set_pitch_scale(self, scale: float) -> None:
             self.pitch_scale = scale
 
+        def reset(self) -> None:
+            self.studied = False
+            self.processed = False
+
+        def set_formant_scale(self, scale: float) -> None:
+            self.formant_scale = scale
+
+        def get_time_ratio(self) -> float:
+            return self.time_ratio
+
+        def get_pitch_scale(self) -> float:
+            return self.pitch_scale
+
+        def get_formant_scale(self) -> float:
+            return getattr(self, "formant_scale", 0.0)
+
+        def get_preferred_start_pad(self) -> int:
+            return 128
+
+        def get_start_delay(self) -> int:
+            return 64
+
+        def get_latency(self) -> int:
+            return 64
+
+        def get_channel_count(self) -> int:
+            return 2
+
+        def set_expected_input_duration(self, samples: int) -> None:
+            self.expected_input_duration = samples
+
+        def set_max_process_size(self, samples: int) -> None:
+            self.max_process_size = samples
+
+        def get_process_size_limit(self) -> int:
+            return 524_288
+
+        def get_samples_required(self) -> int:
+            return 256
+
         def available(self) -> int:
             return 3
 
@@ -267,7 +293,13 @@ def test_stretcher_mirrors_streaming_lifecycle(
         dtype=np.float32,
     )
 
-    stretcher = rubband.Stretcher(SAMPLE_RATE, 2, options=options)
+    stretcher = rubband.Stretcher(
+        SAMPLE_RATE,
+        2,
+        options=options,
+        initial_time_ratio=1.25,
+        initial_pitch_scale=2.0,
+    )
     stretcher.study(audio)
     stretcher.process(audio, final=True)
 
@@ -275,45 +307,84 @@ def test_stretcher_mirrors_streaming_lifecycle(
     assert stretcher.retrieve().shape == (3, 2)
 
 
-def test_real_time_stretcher_accepts_dynamic_ratio_changes_after_processing(
+def test_stretcher_exposes_original_accessor_methods(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    class NativeStretcher:
-        def __init__(
-            self,
-            sample_rate: int,
-            channels: int,
-            time_ratio: float,
-            pitch_scale: float,
-            option_flags: int,
-        ) -> None:
-            self.time_ratio = time_ratio
-            self.pitch_scale = pitch_scale
+    monkeypatch.setattr(_native, "Stretcher", FakeNativeStretcher)
+    stretcher = rubband.Stretcher(
+        SAMPLE_RATE,
+        2,
+        initial_time_ratio=1.25,
+        initial_pitch_scale=2.0,
+    )
 
-        def study(self, audio: NDArray[np.float32], final: bool) -> None:
-            pass
+    assert stretcher.get_time_ratio() == 1.25
+    assert stretcher.get_pitch_scale() == 2.0
+    assert stretcher.get_formant_scale() == 0.0
+    assert stretcher.get_preferred_start_pad() == 128
+    assert stretcher.get_start_delay() == 64
+    assert stretcher.get_latency() == 64
+    assert stretcher.get_channel_count() == 2
+    assert stretcher.get_process_size_limit() == 524_288
+    assert stretcher.get_samples_required() == 256
 
-        def process(self, audio: NDArray[np.float32], final: bool) -> None:
-            pass
+    stretcher.set_formant_scale(0.5)
+    stretcher.set_expected_input_duration(48_000)
+    stretcher.set_max_process_size(1_024)
+    stretcher.set_phase_option(rubband.PhaseOption.independent)
+    stretcher.set_formant_option(rubband.FormantOption.preserved)
+    native = cast(FakeNativeStretcher, stretcher.native)
+    assert native.formant_scale == 0.5
+    assert native.expected_input_duration == 48_000
+    assert native.max_process_size == 1_024
+    assert native.phase_option == 0x00002000
+    assert native.formant_option == 0x01000000
 
-        def set_time_ratio(self, ratio: float) -> None:
-            self.time_ratio = ratio
 
-        def set_pitch_scale(self, scale: float) -> None:
-            self.pitch_scale = scale
-
-        def available(self) -> int:
-            return 0
-
-        def retrieve(self) -> NDArray[np.float32]:
-            return np.zeros((0, 1), dtype=np.float32)
-
-    monkeypatch.setattr(_native, "Stretcher", NativeStretcher)
+def test_real_time_stretcher_accepts_original_option_mutators(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_native, "Stretcher", FakeNativeStretcher)
     stretcher = rubband.Stretcher(
         SAMPLE_RATE,
         1,
-        options=rubband.StretchOptions(
-            sample_rate=SAMPLE_RATE,
+        options=rubband.Options(
+            process=rubband.ProcessOption.real_time,
+        ),
+    )
+
+    stretcher.set_transients_option(rubband.TransientsOption.smooth)
+    stretcher.set_detector_option(rubband.DetectorOption.soft)
+    stretcher.set_pitch_option(rubband.PitchOption.high_consistency)
+
+    native = cast(FakeNativeStretcher, stretcher.native)
+    assert native.transients_option == 0x00000200
+    assert native.detector_option == 0x00000800
+    assert native.pitch_option == 0x04000000
+
+
+def test_offline_stretcher_rejects_real_time_only_option_mutators(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_native, "Stretcher", FakeNativeStretcher)
+    stretcher = rubband.Stretcher(SAMPLE_RATE, 1)
+
+    with pytest.raises(ValueError, match="offline"):
+        stretcher.set_transients_option(rubband.TransientsOption.smooth)
+    with pytest.raises(ValueError, match="offline"):
+        stretcher.set_detector_option(rubband.DetectorOption.soft)
+    with pytest.raises(ValueError, match="offline"):
+        stretcher.set_pitch_option(rubband.PitchOption.high_consistency)
+
+
+def test_real_time_stretcher_accepts_dynamic_ratio_changes_after_processing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_native, "Stretcher", FakeNativeStretcher)
+    stretcher = rubband.Stretcher(
+        SAMPLE_RATE,
+        1,
+        options=rubband.Options(
             process=rubband.ProcessOption.real_time,
         ),
     )
@@ -322,7 +393,7 @@ def test_real_time_stretcher_accepts_dynamic_ratio_changes_after_processing(
     stretcher.set_time_ratio(0.75)
     stretcher.set_pitch_scale(1.5)
 
-    native = cast(NativeStretcher, stretcher.native)
+    native = cast(FakeNativeStretcher, stretcher.native)
     assert native.time_ratio == 0.75
     assert native.pitch_scale == 1.5
 
@@ -330,36 +401,7 @@ def test_real_time_stretcher_accepts_dynamic_ratio_changes_after_processing(
 def test_offline_stretcher_rejects_dynamic_ratio_changes_after_processing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    class NativeStretcher:
-        def __init__(
-            self,
-            sample_rate: int,
-            channels: int,
-            time_ratio: float,
-            pitch_scale: float,
-            option_flags: int,
-        ) -> None:
-            pass
-
-        def study(self, audio: NDArray[np.float32], final: bool) -> None:
-            pass
-
-        def process(self, audio: NDArray[np.float32], final: bool) -> None:
-            pass
-
-        def set_time_ratio(self, ratio: float) -> None:
-            pass
-
-        def set_pitch_scale(self, scale: float) -> None:
-            pass
-
-        def available(self) -> int:
-            return 0
-
-        def retrieve(self) -> NDArray[np.float32]:
-            return np.zeros((0, 1), dtype=np.float32)
-
-    monkeypatch.setattr(_native, "Stretcher", NativeStretcher)
+    monkeypatch.setattr(_native, "Stretcher", FakeNativeStretcher)
     stretcher = rubband.Stretcher(SAMPLE_RATE, 1)
 
     stretcher.process(sine_wave(seconds=1.0), final=False)
@@ -386,13 +428,13 @@ def test_stretcher_rejects_channel_mismatch() -> None:
         stretcher.study(sine_wave(seconds=1.0))
 
 
-def test_stretcher_rejects_mismatched_option_sample_rate() -> None:
-    with pytest.raises(ValueError, match="sample_rate"):
-        rubband.Stretcher(
-            SAMPLE_RATE,
-            1,
-            options=rubband.StretchOptions(sample_rate=44_100),
-        )
+def test_stretcher_rejects_invalid_sample_counts() -> None:
+    stretcher = rubband.Stretcher(SAMPLE_RATE, 1)
+
+    with pytest.raises(ValueError, match="sample count"):
+        stretcher.set_expected_input_duration(-1)
+    with pytest.raises(ValueError, match="sample count"):
+        stretcher.set_max_process_size(-1)
 
 
 def test_backend_load_error_is_clear() -> None:
@@ -416,6 +458,103 @@ def test_backend_load_failure_exits_without_traceback(
 
     assert "could not load its native Rubber Band extension" in str(error.value)
     assert "missing rubband._rubband" in str(error.value)
+
+
+class FakeNativeStretcher:
+    def __init__(
+        self,
+        sample_rate: int,
+        channels: int,
+        time_ratio: float,
+        pitch_scale: float,
+        option_flags: int,
+    ) -> None:
+        self.sample_rate = sample_rate
+        self.channels = channels
+        self.time_ratio = time_ratio
+        self.pitch_scale = pitch_scale
+        self.option_flags = option_flags
+        self.formant_scale = 0.0
+        self.transients_option = 0
+        self.detector_option = 0
+        self.phase_option = 0
+        self.formant_option = 0
+        self.pitch_option = 0
+        self.expected_input_duration = 0
+        self.max_process_size = 0
+        self.started = False
+
+    def study(self, audio: NDArray[np.float32], final: bool) -> None:
+        self.started = True
+
+    def process(self, audio: NDArray[np.float32], final: bool) -> None:
+        self.started = True
+
+    def reset(self) -> None:
+        self.started = False
+
+    def set_time_ratio(self, ratio: float) -> None:
+        self.time_ratio = ratio
+
+    def set_pitch_scale(self, scale: float) -> None:
+        self.pitch_scale = scale
+
+    def set_formant_scale(self, scale: float) -> None:
+        self.formant_scale = scale
+
+    def set_transients_option(self, options: int) -> None:
+        self.transients_option = options
+
+    def set_detector_option(self, options: int) -> None:
+        self.detector_option = options
+
+    def set_phase_option(self, options: int) -> None:
+        self.phase_option = options
+
+    def set_formant_option(self, options: int) -> None:
+        self.formant_option = options
+
+    def set_pitch_option(self, options: int) -> None:
+        self.pitch_option = options
+
+    def get_time_ratio(self) -> float:
+        return self.time_ratio
+
+    def get_pitch_scale(self) -> float:
+        return self.pitch_scale
+
+    def get_formant_scale(self) -> float:
+        return self.formant_scale
+
+    def get_preferred_start_pad(self) -> int:
+        return 128
+
+    def get_start_delay(self) -> int:
+        return 64
+
+    def get_latency(self) -> int:
+        return 64
+
+    def get_channel_count(self) -> int:
+        return self.channels
+
+    def set_expected_input_duration(self, samples: int) -> None:
+        self.expected_input_duration = samples
+
+    def set_max_process_size(self, samples: int) -> None:
+        self.max_process_size = samples
+
+    def get_process_size_limit(self) -> int:
+        return 524_288
+
+    def get_samples_required(self) -> int:
+        return 256
+
+    def available(self) -> int:
+        return 0
+
+    def retrieve(self) -> NDArray[np.float32]:
+        return np.zeros((0, self.channels), dtype=np.float32)
 
 
 def sine_wave(seconds: float, hz: float = 440.0) -> NDArray[np.float32]:
