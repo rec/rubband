@@ -43,3 +43,12 @@ def test_api_docs_do_not_expose_native_internals() -> None:
     assert "rubband._native" not in api
     assert "rubband._rubband" not in api
     assert "stretch_float32" not in api
+
+
+def test_pyinstaller_entrypoint_exists_for_release_script() -> None:
+    entrypoint = Path("install/pyinstaller_entrypoint.py")
+
+    assert entrypoint.is_file()
+    text = entrypoint.read_text()
+    assert "rubband._rubband" in text
+    assert "rubband_main" in text
