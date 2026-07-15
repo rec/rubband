@@ -23,11 +23,21 @@ plugins:
       handlers:
         python:
           options:
+            annotations_path: brief
             docstring_style: google
+            filters:
+              - "!^_"
+            group_by_category: true
             heading_level: 2
             members_order: source
+            separate_signature: true
+            show_if_no_docstring: true
+            show_root_full_path: false
             show_root_heading: true
+            show_signature_annotations: true
             show_source: false
+            show_symbol_type_heading: true
+            signature_crossrefs: true
 
 markdown_extensions:
   - admonition

@@ -9,6 +9,9 @@ The API stays close to Rubber Band's own model:
 - `Stretcher` wraps the stateful Rubber Band stretcher.
 - `stretch()` provides a small offline convenience function.
 
+See the [API reference](api.md) for generated documentation with signatures and
+type annotations.
+
 ## Quick Example
 
 ```python
