@@ -28,7 +28,7 @@ def test_stretch_accepts_one_second_mono_audio(
         pitch_scale: float,
         option_flags: int,
     ) -> NDArray[np.float32]:
-        assert backend_audio.shape == (SAMPLE_RATE, 1)
+        assert backend_audio.shape == (SAMPLE_RATE,)
         assert sample_rate == SAMPLE_RATE
         assert time_ratio == 1.25
         assert pitch_scale == 0.5
@@ -87,8 +87,8 @@ def test_stretch_accepts_one_second_stereo_audio(
     )
 
 
-def test_stretch_rejects_non_numpy_audio() -> None:
-    with pytest.raises(TypeError, match="NumPy ndarray"):
+def test_stretch_rejects_non_array_protocol_audio() -> None:
+    with pytest.raises(TypeError, match="DLPack or the Python buffer protocol"):
         rubband.stretch(
             [0.0],  # type: ignore[arg-type]
             SAMPLE_RATE,

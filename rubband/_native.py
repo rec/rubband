@@ -5,14 +5,11 @@ import sys
 from functools import cache
 from typing import Protocol, cast
 
-import numpy as np
-from numpy.typing import NDArray
-
 
 class _NativeStretcher(Protocol):
-    def study(self, audio: NDArray[np.float32], final: bool) -> None: ...
+    def study(self, audio: object, final: bool) -> None: ...
 
-    def process(self, audio: NDArray[np.float32], final: bool) -> None: ...
+    def process(self, audio: object, final: bool) -> None: ...
 
     def reset(self) -> None: ...
 
@@ -56,7 +53,7 @@ class _NativeStretcher(Protocol):
 
     def available(self) -> int: ...
 
-    def retrieve(self) -> NDArray[np.float32]: ...
+    def retrieve(self) -> object: ...
 
 
 class _RubbandBackend(Protocol):
@@ -73,12 +70,12 @@ class _RubbandBackend(Protocol):
 
     def stretch_float32(
         self,
-        audio: NDArray[np.float32],
+        audio: object,
         sample_rate: int,
         time_ratio: float,
         pitch_scale: float,
         option_flags: int,
-    ) -> NDArray[np.float32]: ...
+    ) -> object: ...
 
 
 def _load_backend() -> _RubbandBackend:
@@ -118,11 +115,11 @@ class Stretcher:
             option_flags,
         )
 
-    def study(self, audio: NDArray[np.float32], final: bool) -> None:
-        self.handle.study(np.asarray(audio, dtype=np.float32, order="F"), final)
+    def study(self, audio: object, final: bool) -> None:
+        self.handle.study(audio, final)
 
-    def process(self, audio: NDArray[np.float32], final: bool) -> None:
-        self.handle.process(np.asarray(audio, dtype=np.float32, order="F"), final)
+    def process(self, audio: object, final: bool) -> None:
+        self.handle.process(audio, final)
 
     def reset(self) -> None:
         self.handle.reset()
@@ -187,8 +184,8 @@ class Stretcher:
     def available(self) -> int:
         return self.handle.available()
 
-    def retrieve(self) -> NDArray[np.float32]:
-        return np.asarray(self.handle.retrieve(), dtype=np.float32, order="C")
+    def retrieve(self) -> object:
+        return self.handle.retrieve()
 
 
 def metadata(
@@ -208,18 +205,16 @@ def metadata(
 
 
 def stretch_float32(
-    audio: NDArray[np.float32],
+    audio: object,
     sample_rate: int,
     time_ratio: float,
     pitch_scale: float,
     option_flags: int,
-) -> NDArray[np.float32]:
-    planar = np.asarray(audio, dtype=np.float32, order="F")
-    result = _backend().stretch_float32(
-        planar,
+) -> object:
+    return _backend().stretch_float32(
+        audio,
         sample_rate,
         time_ratio,
         pitch_scale,
         option_flags,
     )
-    return np.asarray(result, dtype=np.float32, order="C")

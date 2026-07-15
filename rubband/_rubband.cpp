@@ -10,28 +10,42 @@
 
 namespace nb = nanobind;
 
-using AudioArray = nb::ndarray<nb::numpy, const float, nb::shape<-1, -1>, nb::f_contig>;
-using OutputArray = nb::ndarray<nb::numpy, float, nb::shape<-1, -1>, nb::f_contig>;
+using AudioArray = nb::ndarray<const float, nb::device::cpu, nb::c_contig>;
+using OutputArray = nb::ndarray<nb::memview, float, nb::device::cpu, nb::c_contig>;
+
+size_t frame_count(AudioArray audio) {
+    if (audio.ndim() != 1 && audio.ndim() != 2) {
+        throw std::runtime_error("audio must have shape (frames,) or (frames, channels)");
+    }
+    return audio.shape(0);
+}
+
+size_t channel_count(AudioArray audio) {
+    if (audio.ndim() == 1) {
+        return 1;
+    }
+    return audio.shape(1);
+}
 
 std::vector<std::vector<float>> copy_planar(AudioArray audio, size_t expected_channels) {
-    const size_t frames = audio.shape(0);
-    const size_t channels = audio.shape(1);
+    const size_t frames = frame_count(audio);
+    const size_t channels = channel_count(audio);
     if (frames < 1) {
         throw std::runtime_error("expected at least one frame");
+    }
+    if (channels < 1) {
+        throw std::runtime_error("expected at least one channel");
     }
     if (channels != expected_channels) {
         throw std::runtime_error("audio channel count does not match stretcher");
     }
-    if (audio.stride(0) != 1) {
-        throw std::runtime_error("expected Fortran-order audio");
-    }
     const float *input = audio.data();
     std::vector<std::vector<float>> input_storage(channels);
     for (size_t channel = 0; channel < channels; ++channel) {
-        input_storage[channel].assign(
-            input + channel * frames,
-            input + (channel + 1) * frames
-        );
+        input_storage[channel].resize(frames);
+        for (size_t frame = 0; frame < frames; ++frame) {
+            input_storage[channel][frame] = input[frame * channels + channel];
+        }
     }
     return input_storage;
 }
@@ -48,7 +62,8 @@ std::vector<const float *> channel_pointers(
 
 OutputArray retrieve_from(
     RubberBand::RubberBandStretcher &stretcher,
-    size_t channels
+    size_t channels,
+    bool mono = false
 ) {
     int available = stretcher.available();
     if (available < 0) {
@@ -71,17 +86,18 @@ OutputArray retrieve_from(
 
     auto output = std::make_unique<std::vector<float>>(retrieved * channels);
     for (size_t channel = 0; channel < channels; ++channel) {
-        std::copy_n(
-            output_channels[channel].data(),
-            retrieved,
-            output->data() + channel * retrieved
-        );
+        for (size_t frame = 0; frame < retrieved; ++frame) {
+            (*output)[frame * channels + channel] = output_channels[channel][frame];
+        }
     }
 
     float *data = output->data();
     nb::capsule owner(output.release(), [](void *p) noexcept {
         delete static_cast<std::vector<float> *>(p);
     });
+    if (mono) {
+        return OutputArray(data, {retrieved}, owner);
+    }
     return OutputArray(data, {retrieved, channels}, owner);
 }
 
@@ -114,14 +130,14 @@ public:
         auto input_storage = copy_planar(audio, channels_);
         auto input_channels = channel_pointers(input_storage);
         nb::gil_scoped_release release;
-        stretcher_.study(input_channels.data(), audio.shape(0), final);
+        stretcher_.study(input_channels.data(), frame_count(audio), final);
     }
 
     void process(AudioArray audio, bool final) {
         auto input_storage = copy_planar(audio, channels_);
         auto input_channels = channel_pointers(input_storage);
         nb::gil_scoped_release release;
-        stretcher_.process(input_channels.data(), audio.shape(0), final);
+        stretcher_.process(input_channels.data(), frame_count(audio), final);
     }
 
     void reset() {
@@ -251,8 +267,8 @@ OutputArray stretch_float32(
     double pitch_scale,
     int option_flags
 ) {
-    const size_t frames = audio.shape(0);
-    const size_t channels = audio.shape(1);
+    const size_t frames = frame_count(audio);
+    const size_t channels = channel_count(audio);
     if (channels < 1 || channels > 256) {
         throw std::runtime_error("expected audio shape (frames, channels)");
     }
@@ -276,7 +292,7 @@ OutputArray stretch_float32(
         stretcher.process(input_channels.data(), frames, true);
     }
 
-    return retrieve_from(stretcher, channels);
+    return retrieve_from(stretcher, channels, audio.ndim() == 1);
 }
 
 NB_MODULE(_rubband, module) {
@@ -289,8 +305,18 @@ NB_MODULE(_rubband, module) {
             nb::arg("pitch_scale"),
             nb::arg("option_flags")
         )
-        .def("study", &Stretcher::study, nb::arg("audio"), nb::arg("final") = false)
-        .def("process", &Stretcher::process, nb::arg("audio"), nb::arg("final") = false)
+        .def(
+            "study",
+            &Stretcher::study,
+            nb::arg("audio").noconvert(),
+            nb::arg("final") = false
+        )
+        .def(
+            "process",
+            &Stretcher::process,
+            nb::arg("audio").noconvert(),
+            nb::arg("final") = false
+        )
         .def("reset", &Stretcher::reset)
         .def("set_time_ratio", &Stretcher::set_time_ratio, nb::arg("ratio"))
         .def("set_pitch_scale", &Stretcher::set_pitch_scale, nb::arg("scale"))
@@ -338,7 +364,7 @@ NB_MODULE(_rubband, module) {
     module.def(
         "stretch_float32",
         &stretch_float32,
-        nb::arg("audio"),
+        nb::arg("audio").noconvert(),
         nb::arg("sample_rate"),
         nb::arg("time_ratio"),
         nb::arg("pitch_scale"),

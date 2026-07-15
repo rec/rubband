@@ -29,10 +29,12 @@ def test_native_source_audio_regression(file_regression: FileRegressionFixture) 
 def test_native_stretch_regression(file_regression: FileRegressionFixture) -> None:
     audio = sine_wave(seconds=1.0)
 
-    result = rubband.stretch(
-        audio,
-        SAMPLE_RATE,
-        time_ratio=1.25,
+    result = np.asarray(
+        rubband.stretch(
+            audio,
+            SAMPLE_RATE,
+            time_ratio=1.25,
+        )
     )
 
     assert result.shape == (60_000,)
@@ -47,10 +49,12 @@ def test_native_stretch_regression(file_regression: FileRegressionFixture) -> No
 def test_native_pitch_shift_regression(file_regression: FileRegressionFixture) -> None:
     audio = sine_wave(seconds=1.0, hz=330.0)
 
-    result = rubband.stretch(
-        audio,
-        SAMPLE_RATE,
-        pitch_scale=2.0,
+    result = np.asarray(
+        rubband.stretch(
+            audio,
+            SAMPLE_RATE,
+            pitch_scale=2.0,
+        )
     )
 
     assert result.shape == (SAMPLE_RATE,)
@@ -62,13 +66,22 @@ def test_native_pitch_shift_regression(file_regression: FileRegressionFixture) -
     )
 
 
+def test_native_accepts_dlpack_audio() -> None:
+    audio = sine_wave(seconds=1.0)
+
+    result = np.asarray(rubband.stretch(DLPackAudio(audio), SAMPLE_RATE))
+
+    assert result.shape == (SAMPLE_RATE,)
+    assert np.max(np.abs(result)) > 0.1
+
+
 def test_native_stretcher_regression(file_regression: FileRegressionFixture) -> None:
     audio = sine_wave(seconds=1.0)
     stretcher = rubband.Stretcher(SAMPLE_RATE, 1)
 
     stretcher.study(audio, final=True)
     stretcher.process(audio, final=True)
-    result = stretcher.retrieve()
+    result = np.asarray(stretcher.retrieve())
 
     assert result.shape == (SAMPLE_RATE, 1)
     assert np.max(np.abs(result)) > 0.1
@@ -106,11 +119,13 @@ def test_native_stereo_outputs_have_matching_prefixes() -> None:
     )
 
     outputs = [
-        rubband.stretch(
-            audio,
-            SAMPLE_RATE,
-            time_ratio=1.25,
-            pitch_scale=2.0,
+        np.asarray(
+            rubband.stretch(
+                audio,
+                SAMPLE_RATE,
+                time_ratio=1.25,
+                pitch_scale=2.0,
+            )
         )
         for _ in range(8)
     ]
@@ -142,10 +157,12 @@ def test_native_pianolead_pitch_regression(
 ) -> None:
     audio, sample_rate = read_wav_float32(PIANO_LEAD)
 
-    result = rubband.stretch(
-        audio,
-        sample_rate,
-        pitch_scale=2.0 ** (semitones / 12.0),
+    result = np.asarray(
+        rubband.stretch(
+            audio,
+            sample_rate,
+            pitch_scale=2.0 ** (semitones / 12.0),
+        )
     )
 
     assert result.shape[0] >= sample_rate
@@ -217,3 +234,14 @@ def wav_bytes(audio: NDArray[np.float32], sample_rate: int = SAMPLE_RATE) -> byt
             wav.setframerate(sample_rate)
             wav.writeframes(pcm.tobytes())
         return buffer.getvalue()
+
+
+class DLPackAudio:
+    def __init__(self, audio: NDArray[np.float32]) -> None:
+        self.audio = audio
+
+    def __dlpack__(self, stream: object = None, max_version: object = None) -> object:
+        return self.audio.__dlpack__(stream=stream, max_version=max_version)
+
+    def __dlpack_device__(self) -> tuple[int, int]:
+        return self.audio.__dlpack_device__()

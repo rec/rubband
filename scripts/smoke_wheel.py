@@ -2,21 +2,21 @@ from __future__ import annotations
 
 import sys
 import tempfile
+from array import array
 from pathlib import Path
 from shutil import which
 from subprocess import run
-
-import numpy as np
 
 
 def smoke_installed_package() -> None:
     import rubband
 
-    audio = np.zeros(48_000, dtype=np.float32)
+    audio = array("f", [0.0] * 48_000)
     out = rubband.stretch(audio, 48_000)
-    assert out.dtype == np.float32
-    assert out.ndim == 1
-    assert out.shape[0] >= 48_000
+    view = memoryview(out)
+    assert view.format == "f"
+    assert view.ndim == 1
+    assert view.shape[0] >= 48_000
 
 
 def main() -> None:

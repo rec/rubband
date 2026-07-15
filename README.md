@@ -4,10 +4,15 @@ Python bindings for Rubber Band audio pitch shifting and time stretching.
 
 Documentation: https://rec.github.io/rubband/
 
-The current API is NumPy-only:
+The API accepts contiguous CPU `float32` audio through DLPack or the Python
+buffer protocol:
 
 ```python
+from array import array
+
 import rubband
+
+audio = array("f", [0.0] * 48_000)
 
 shifted = rubband.stretch(
     audio,
@@ -47,12 +52,16 @@ as `reset()`, `get_time_ratio()`, `get_pitch_scale()`,
 
 Input constraints:
 
-- `numpy.ndarray` only
+- DLPack or Python buffer protocol input
 - `float32` only
 - CPU memory only
 - shape `(frames,)` for mono or `(frames, channels)` for multichannel audio
 - C-contiguous arrays only
 - sample rates from 8,000 to 192,000 Hz
+
+`stretch()` and `Stretcher.retrieve()` return `memoryview` objects over
+C-contiguous `float32` output. Callers can convert those results into their
+preferred array library.
 
 The native backend is a nanobind extension over Rubber Band. Building it requires
 `librubberband` to be installed and discoverable through `pkg-config`.

@@ -6,10 +6,7 @@ import sys
 from enum import StrEnum
 from functools import cached_property
 from threading import Lock
-from typing import cast
 
-import numpy as np
-from numpy.typing import NDArray
 from pydantic import (
     BaseModel,
     ConfigDict,
@@ -205,13 +202,13 @@ class Stretcher(BaseModel):
             self.options.option_flags,
         )
 
-    def study(self, audio: NDArray[np.float32], final: bool = False) -> None:
+    def study(self, audio: object, final: bool = False) -> None:
         normalized = _validate_stretcher_audio(audio, self.channels)
         with self._lock:
             self.native.study(normalized, final)
             self._started = True
 
-    def process(self, audio: NDArray[np.float32], final: bool = False) -> None:
+    def process(self, audio: object, final: bool = False) -> None:
         normalized = _validate_stretcher_audio(audio, self.channels)
         with self._lock:
             self.native.process(normalized, final)
@@ -319,7 +316,7 @@ class Stretcher(BaseModel):
         with self._lock:
             return self.native.available()
 
-    def retrieve(self) -> NDArray[np.float32]:
+    def retrieve(self) -> object:
         with self._lock:
             result = self.native.retrieve()
         _validate_result(result, self.channels)
@@ -337,22 +334,23 @@ class Stretcher(BaseModel):
 
 
 def stretch(
-    audio: NDArray[np.float32],
+    audio: object,
     sample_rate: int,
     time_ratio: float = 1.0,
     pitch_scale: float = 1.0,
     options: Options | None = None,
-) -> NDArray[np.float32]:
-    """Stretch and pitch-shift CPU NumPy audio in one offline call.
+) -> object:
+    """Stretch and pitch-shift CPU float32 audio in one offline call.
 
-    Input must be float32 NumPy audio with shape ``(frames,)`` for mono or
-    ``(frames, channels)`` for multichannel audio. It must be C-contiguous.
+    Input must be contiguous CPU float32 audio with shape ``(frames,)`` for
+    mono or ``(frames, channels)`` for multichannel audio. Objects may expose
+    DLPack or the Python buffer protocol.
     """
     sample_rate = _validate_sample_rate(sample_rate)
     time_ratio = _validate_positive_ratio(time_ratio)
     pitch_scale = _validate_positive_ratio(pitch_scale)
     resolved_options = options or Options()
-    normalized, mono = _validate_audio(audio)
+    normalized, channels = _validate_audio(audio)
     result = _native.stretch_float32(
         normalized,
         sample_rate,
@@ -360,9 +358,7 @@ def stretch(
         pitch_scale,
         resolved_options.option_flags,
     )
-    _validate_result(result, normalized.shape[1])
-    if mono:
-        return result[:, 0].copy()
+    _validate_result(result, channels)
     return result
 
 
@@ -422,48 +418,59 @@ def _validate_sample_count(value: int) -> int:
     return value
 
 
-def _validate_audio(audio: object) -> tuple[NDArray[np.float32], bool]:
-    if not isinstance(audio, np.ndarray):
-        raise TypeError("audio must be a NumPy ndarray")
-    if audio.dtype != np.float32:
-        raise TypeError("audio must have dtype float32")
-    typed_audio = cast(NDArray[np.float32], audio)
-    if audio.ndim == 1:
-        if audio.shape[0] == 0:
-            raise ValueError("audio must contain at least one frame")
-        if not audio.flags.c_contiguous:
-            raise ValueError("audio must be C-contiguous")
-        return typed_audio.reshape((audio.shape[0], 1)), True
-    if audio.ndim != 2:
+def _validate_audio(audio: object) -> tuple[object, int | None]:
+    try:
+        view = memoryview(audio)  # ty: ignore[invalid-argument-type]
+    except TypeError as error:
+        if hasattr(audio, "__dlpack__"):
+            return audio, None
+        raise TypeError(
+            "audio must expose DLPack or the Python buffer protocol"
+        ) from error
+    if view.shape is None:
         raise ValueError("audio must have shape (frames,) or (frames, channels)")
-    if audio.shape[0] == 0:
+    shape = view.shape
+    if view.format not in {"f", "<f", "=f"} or view.itemsize != 4:
+        raise TypeError("audio must have dtype float32")
+    if view.ndim == 1:
+        if shape[0] == 0:
+            raise ValueError("audio must contain at least one frame")
+        if not view.c_contiguous:
+            raise ValueError("audio must be C-contiguous")
+        return audio, 1
+    if view.ndim != 2:
+        raise ValueError("audio must have shape (frames,) or (frames, channels)")
+    if shape[0] == 0:
         raise ValueError("audio must contain at least one frame")
-    if audio.shape[1] == 0:
+    if shape[1] == 0:
         raise ValueError("audio must contain at least one channel")
-    if not audio.flags.c_contiguous:
+    if not view.c_contiguous:
         raise ValueError("audio must be C-contiguous")
-    return typed_audio, False
+    return audio, shape[1]
 
 
-def _validate_result(result: object, channels: int) -> None:
-    if not isinstance(result, np.ndarray):
-        raise TypeError("native backend returned a non-NumPy result")
-    if result.dtype != np.float32:
-        raise TypeError("native backend returned non-float32 audio")
-    if result.ndim != 2:
+def _validate_result(result: object, channels: int | None) -> None:
+    try:
+        view = memoryview(result)  # ty: ignore[invalid-argument-type]
+    except TypeError as error:
+        raise TypeError("native backend returned non-buffer audio") from error
+    if view.shape is None:
         raise ValueError("native backend returned audio with the wrong rank")
-    if result.shape[1] != channels:
+    shape = view.shape
+    if view.format not in {"f", "<f", "=f"} or view.itemsize != 4:
+        raise TypeError("native backend returned non-float32 audio")
+    if view.ndim not in {1, 2}:
+        raise ValueError("native backend returned audio with the wrong rank")
+    result_channels = 1 if view.ndim == 1 else shape[1]
+    if channels is not None and result_channels != channels:
         raise ValueError("native backend returned audio with the wrong channel count")
-    if not result.flags.c_contiguous:
+    if not view.c_contiguous:
         raise ValueError("native backend returned non-contiguous audio")
 
 
-def _validate_stretcher_audio(
-    audio: NDArray[np.float32],
-    channels: int,
-) -> NDArray[np.float32]:
-    normalized, _ = _validate_audio(audio)
-    if normalized.shape[1] != channels:
+def _validate_stretcher_audio(audio: object, channels: int) -> object:
+    normalized, detected_channels = _validate_audio(audio)
+    if detected_channels is not None and detected_channels != channels:
         raise ValueError("audio channel count does not match stretcher")
     return normalized
 

@@ -1,7 +1,8 @@
 # rubband
 
-`rubband` is a NumPy-focused Python binding for the Rubber Band audio time
-stretching and pitch shifting library.
+`rubband` is a Python binding for the Rubber Band audio time stretching and
+pitch shifting library. Audio inputs can come from DLPack producers such as
+NumPy and PyTorch, or from Python buffer protocol objects such as `array.array`.
 
 The API stays close to Rubber Band's own model:
 
@@ -15,10 +16,11 @@ type annotations.
 ## Quick Example
 
 ```python
-import numpy as np
+from array import array
+
 import rubband
 
-audio = np.zeros(48_000, dtype=np.float32)
+audio = array("f", [0.0] * 48_000)
 
 shifted = rubband.stretch(
     audio,
@@ -30,12 +32,14 @@ shifted = rubband.stretch(
 
 ## Input Constraints
 
-- `numpy.ndarray` only
+- DLPack or Python buffer protocol input
 - `float32` only
 - CPU memory only
 - shape `(frames,)` for mono or `(frames, channels)` for multichannel audio
 - C-contiguous arrays only
 - sample rates from 8,000 to 192,000 Hz
+
+Outputs are `memoryview` objects over C-contiguous `float32` audio.
 
 ## Stateful Processing
 
