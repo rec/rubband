@@ -186,6 +186,99 @@ class Options(BaseModel):
         )
 
 
+class AudioBuffer(BaseModel):
+    """Output audio returned by `stretch()` and `Stretcher.retrieve()`.
+
+    Attributes:
+        data: C-contiguous float32 audio exposed through the Python buffer protocol.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True, frozen=True)
+
+    data: object = Field(description="Underlying C-contiguous float32 audio buffer.")
+
+    @field_validator("data", mode="before")
+    @classmethod
+    def validate_data(cls, value: object) -> object:
+        """Validate and normalize an output audio buffer.
+
+        Args:
+            value: Object exposing a C-contiguous float32 buffer.
+
+        Returns:
+            A memoryview over the provided audio.
+        """
+        view = memoryview(_validate_result(value, None))  # ty: ignore[invalid-argument-type]
+        if view.ndim == 2 and view.shape is not None and view.shape[1] == 0:
+            raise ValueError("audio must contain at least one channel")
+        return view
+
+    @property
+    def dtype(self) -> str:
+        """Return the public dtype name for this buffer."""
+        return "float32"
+
+    @property
+    def frames(self) -> int:
+        """Return the number of audio frames."""
+        view = memoryview(self.data)  # ty: ignore[invalid-argument-type]
+        if view.shape is None:
+            raise ValueError("audio buffer has no shape")
+        return view.shape[0]
+
+    @property
+    def channels(self) -> int:
+        """Return the number of audio channels."""
+        view = memoryview(self.data)  # ty: ignore[invalid-argument-type]
+        if view.shape is None:
+            raise ValueError("audio buffer has no shape")
+        if view.ndim == 1:
+            return 1
+        return view.shape[1]
+
+    @property
+    def shape(self) -> tuple[int] | tuple[int, int]:
+        """Return the audio shape as ``(frames,)`` or ``(frames, channels)``."""
+        view = memoryview(self.data)  # ty: ignore[invalid-argument-type]
+        if view.shape is None:
+            raise ValueError("audio buffer has no shape")
+        if view.ndim == 1:
+            return (view.shape[0],)
+        return (view.shape[0], view.shape[1])
+
+    def memoryview(self) -> object:
+        """Return the underlying zero-copy memoryview."""
+        return memoryview(self.data)  # ty: ignore[invalid-argument-type]
+
+    def numpy(self) -> object:
+        """Return a NumPy view of the audio buffer.
+
+        Returns:
+            NumPy array view over the same audio memory.
+        """
+        try:
+            import numpy as np
+        except ImportError as error:
+            raise ImportError(
+                "NumPy is required to convert AudioBuffer to NumPy"
+            ) from error
+        return np.asarray(self.data)
+
+    def torch(self) -> object:
+        """Return a PyTorch CPU tensor view of the audio buffer.
+
+        Returns:
+            PyTorch tensor view over the same audio memory.
+        """
+        try:
+            import torch
+        except ImportError as error:
+            raise ImportError(
+                "PyTorch is required to convert AudioBuffer to PyTorch"
+            ) from error
+        return torch.frombuffer(self.data, dtype=torch.float32).reshape(self.shape)
+
+
 class RubberBandMetadata(BaseModel):
     """Read-only values reported by a configured Rubber Band stretcher.
 
@@ -474,16 +567,16 @@ class Stretcher(BaseModel):
         with self._lock:
             return self.native.available()
 
-    def retrieve(self) -> object:
-        """Return available output audio as a float32 `memoryview`.
+    def retrieve(self) -> AudioBuffer:
+        """Return available output audio.
 
         Returns:
-            C-contiguous float32 output with shape ``(frames, channels)``.
+            AudioBuffer with shape ``(frames, channels)``.
         """
         with self._lock:
             result = self.native.retrieve()
         _validate_result(result, self.channels)
-        return result
+        return AudioBuffer(data=result)
 
     def _validate_dynamic_ratio_change(self) -> None:
         if self.options.process == ProcessOption.offline and self._started:
@@ -502,7 +595,7 @@ def stretch(
     time_ratio: float = 1.0,
     pitch_scale: float = 1.0,
     options: Options | None = None,
-) -> object:
+) -> AudioBuffer:
     """Stretch and pitch-shift CPU float32 audio in one offline call.
 
     Input must be contiguous CPU float32 audio with shape ``(frames,)`` for
@@ -517,7 +610,7 @@ def stretch(
         options: Rubber Band option flags for the one-shot stretcher.
 
     Returns:
-        C-contiguous float32 output as a `memoryview`.
+        AudioBuffer containing C-contiguous float32 output.
     """
     sample_rate = _validate_sample_rate(sample_rate)
     time_ratio = _validate_positive_ratio(time_ratio)
@@ -532,7 +625,7 @@ def stretch(
         resolved_options.option_flags,
     )
     _validate_result(result, channels)
-    return result
+    return AudioBuffer(data=result)
 
 
 def metadata(
@@ -633,7 +726,7 @@ def _validate_audio(audio: object) -> tuple[object, int | None]:
     return audio, shape[1]
 
 
-def _validate_result(result: object, channels: int | None) -> None:
+def _validate_result(result: object, channels: int | None) -> object:
     try:
         view = memoryview(result)  # ty: ignore[invalid-argument-type]
     except TypeError as error:
@@ -650,6 +743,7 @@ def _validate_result(result: object, channels: int | None) -> None:
         raise ValueError("native backend returned audio with the wrong channel count")
     if not view.c_contiguous:
         raise ValueError("native backend returned non-contiguous audio")
+    return view
 
 
 def _validate_stretcher_audio(audio: object, channels: int) -> object:

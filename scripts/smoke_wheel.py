@@ -13,10 +13,10 @@ def smoke_installed_package() -> None:
 
     audio = array("f", [0.0] * 48_000)
     out = rubband.stretch(audio, 48_000)
-    view = memoryview(out)
+    assert out.dtype == "float32"
+    assert out.shape[0] >= 48_000
+    view = memoryview(out.memoryview())  # ty: ignore[invalid-argument-type]
     assert view.format == "f"
-    assert view.ndim == 1
-    assert view.shape[0] >= 48_000
 
 
 def main() -> None:

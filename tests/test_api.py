@@ -39,19 +39,17 @@ def test_stretch_accepts_one_second_mono_audio(
 
     monkeypatch.setattr(_native, "stretch_float32", stretch_float32)
 
-    result = cast(
-        NDArray[np.float32],
-        rubband.stretch(
-            audio,
-            SAMPLE_RATE,
-            time_ratio=1.25,
-            pitch_scale=0.5,
-        ),
+    result = rubband.stretch(
+        audio,
+        SAMPLE_RATE,
+        time_ratio=1.25,
+        pitch_scale=0.5,
     )
+    audio_result = cast(NDArray[np.float32], result.numpy())
 
     assert result.shape == (SAMPLE_RATE,)
     file_regression.check(
-        wav_bytes(result),
+        wav_bytes(audio_result),
         extension=".wav",
         binary=True,
     )
@@ -78,18 +76,16 @@ def test_stretch_accepts_one_second_stereo_audio(
 
     monkeypatch.setattr(_native, "stretch_float32", stretch_float32)
 
-    result = cast(
-        NDArray[np.float32],
-        rubband.stretch(
-            np.ascontiguousarray(audio, dtype=np.float32),
-            SAMPLE_RATE,
-            pitch_scale=2.0,
-        ),
+    result = rubband.stretch(
+        np.ascontiguousarray(audio, dtype=np.float32),
+        SAMPLE_RATE,
+        pitch_scale=2.0,
     )
+    audio_result = cast(NDArray[np.float32], result.numpy())
 
     assert result.shape == (SAMPLE_RATE, 2)
     file_regression.check(
-        wav_bytes(result),
+        wav_bytes(audio_result),
         extension=".wav",
         binary=True,
     )
@@ -116,7 +112,7 @@ def test_stretch_accepts_array_buffer_audio(
 
     result = rubband.stretch(audio, SAMPLE_RATE)
 
-    view = memoryview(result)  # ty: ignore[invalid-argument-type]
+    view = memoryview(result.memoryview())  # ty: ignore[invalid-argument-type]
     assert view.format == "f"
     assert view.shape == (SAMPLE_RATE,)
 
@@ -140,7 +136,8 @@ def test_stretch_accepts_memoryview_audio(
 
     result = rubband.stretch(audio, SAMPLE_RATE)
 
-    assert memoryview(result).shape == (SAMPLE_RATE,)  # ty: ignore[invalid-argument-type]
+    view = memoryview(result.memoryview())  # ty: ignore[invalid-argument-type]
+    assert view.shape == (SAMPLE_RATE,)
 
 
 def test_stretch_rejects_non_array_protocol_audio() -> None:
@@ -384,7 +381,7 @@ def test_stretcher_mirrors_streaming_lifecycle(
     stretcher.process(audio, final=True)
 
     assert stretcher.available() == 3
-    result = cast(NDArray[np.float32], stretcher.retrieve())
+    result = stretcher.retrieve()
     assert result.shape == (3, 2)
 
 
@@ -545,6 +542,14 @@ def test_documented_public_callables_have_docstrings() -> None:
     public_callables = [
         rubband.stretch,
         rubband.metadata,
+        rubband.AudioBuffer.validate_data,
+        rubband.AudioBuffer.dtype.fget,
+        rubband.AudioBuffer.frames.fget,
+        rubband.AudioBuffer.channels.fget,
+        rubband.AudioBuffer.shape.fget,
+        rubband.AudioBuffer.memoryview,
+        rubband.AudioBuffer.numpy,
+        rubband.AudioBuffer.torch,
         rubband.Options.option_flags.fget,
         rubband.Stretcher.study,
         rubband.Stretcher.process,

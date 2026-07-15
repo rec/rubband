@@ -5,6 +5,7 @@ import math
 import wave
 from array import array
 from pathlib import Path
+from typing import cast
 
 import numpy as np
 import pytest
@@ -30,12 +31,13 @@ def test_native_source_audio_regression(file_regression: FileRegressionFixture) 
 def test_native_stretch_regression(file_regression: FileRegressionFixture) -> None:
     audio = sine_wave(seconds=1.0)
 
-    result = np.asarray(
+    result = cast(
+        NDArray[np.float32],
         rubband.stretch(
             audio,
             SAMPLE_RATE,
             time_ratio=1.25,
-        )
+        ).numpy(),
     )
 
     assert result.shape == (60_000,)
@@ -50,12 +52,13 @@ def test_native_stretch_regression(file_regression: FileRegressionFixture) -> No
 def test_native_pitch_shift_regression(file_regression: FileRegressionFixture) -> None:
     audio = sine_wave(seconds=1.0, hz=330.0)
 
-    result = np.asarray(
+    result = cast(
+        NDArray[np.float32],
         rubband.stretch(
             audio,
             SAMPLE_RATE,
             pitch_scale=2.0,
-        )
+        ).numpy(),
     )
 
     assert result.shape == (SAMPLE_RATE,)
@@ -70,7 +73,10 @@ def test_native_pitch_shift_regression(file_regression: FileRegressionFixture) -
 def test_native_accepts_dlpack_audio() -> None:
     audio = sine_wave(seconds=1.0)
 
-    result = np.asarray(rubband.stretch(DLPackAudio(audio), SAMPLE_RATE))
+    result = cast(
+        NDArray[np.float32],
+        rubband.stretch(DLPackAudio(audio), SAMPLE_RATE).numpy(),
+    )
 
     assert result.shape == (SAMPLE_RATE,)
     assert np.max(np.abs(result)) > 0.1
@@ -79,7 +85,7 @@ def test_native_accepts_dlpack_audio() -> None:
 def test_native_accepts_array_buffer_audio() -> None:
     audio = array("f", sine_wave(seconds=1.0).tolist())
 
-    result = np.asarray(rubband.stretch(audio, SAMPLE_RATE))
+    result = cast(NDArray[np.float32], rubband.stretch(audio, SAMPLE_RATE).numpy())
 
     assert result.shape == (SAMPLE_RATE,)
     assert np.max(np.abs(result)) > 0.1
@@ -88,7 +94,7 @@ def test_native_accepts_array_buffer_audio() -> None:
 def test_native_accepts_memoryview_audio() -> None:
     audio = memoryview(array("f", sine_wave(seconds=1.0).tolist()))
 
-    result = np.asarray(rubband.stretch(audio, SAMPLE_RATE))
+    result = cast(NDArray[np.float32], rubband.stretch(audio, SAMPLE_RATE).numpy())
 
     assert result.shape == (SAMPLE_RATE,)
     assert np.max(np.abs(result)) > 0.1
@@ -99,7 +105,7 @@ def test_native_accepts_contiguous_torch_cpu_tensor() -> None:
     frames = torch.arange(SAMPLE_RATE, dtype=torch.float32)
     audio = torch.sin(2.0 * math.pi * 440.0 * frames / SAMPLE_RATE) * 0.25
 
-    result = np.asarray(rubband.stretch(audio, SAMPLE_RATE))
+    result = cast(NDArray[np.float32], rubband.stretch(audio, SAMPLE_RATE).numpy())
 
     assert result.shape == (SAMPLE_RATE,)
     assert np.max(np.abs(result)) > 0.1
@@ -123,15 +129,29 @@ def test_native_rejects_torch_cuda_tensor() -> None:
         rubband.stretch(audio, SAMPLE_RATE)
 
 
-def test_native_stretch_returns_float32_memoryview() -> None:
+def test_native_stretch_returns_float32_audio_buffer() -> None:
+    result = rubband.stretch(sine_wave(seconds=1.0), SAMPLE_RATE)
+    view = memoryview(result.memoryview())  # ty: ignore[invalid-argument-type]
+
+    assert isinstance(result, rubband.AudioBuffer)
+    assert result.dtype == "float32"
+    assert result.frames == SAMPLE_RATE
+    assert result.channels == 1
+    assert result.shape == (SAMPLE_RATE,)
+    assert view.format == "f"
+    assert view.itemsize == 4
+    assert view.ndim == 1
+    assert view.c_contiguous
+
+
+def test_native_audio_buffer_converts_to_torch_tensor() -> None:
+    torch = pytest.importorskip("torch")
     result = rubband.stretch(sine_wave(seconds=1.0), SAMPLE_RATE)
 
-    assert isinstance(result, memoryview)
-    assert result.format == "f"
-    assert result.itemsize == 4
-    assert result.ndim == 1
-    assert result.shape == (SAMPLE_RATE,)
-    assert result.c_contiguous
+    tensor = result.torch()
+
+    assert tuple(tensor.shape) == (SAMPLE_RATE,)  # ty: ignore[unresolved-attribute]
+    assert tensor.dtype == torch.float32  # ty: ignore[unresolved-attribute]
 
 
 def test_native_stretcher_regression(file_regression: FileRegressionFixture) -> None:
@@ -140,7 +160,7 @@ def test_native_stretcher_regression(file_regression: FileRegressionFixture) -> 
 
     stretcher.study(audio, final=True)
     stretcher.process(audio, final=True)
-    result = np.asarray(stretcher.retrieve())
+    result = cast(NDArray[np.float32], stretcher.retrieve().numpy())
 
     assert result.shape == (SAMPLE_RATE, 1)
     assert np.max(np.abs(result)) > 0.1
@@ -151,20 +171,24 @@ def test_native_stretcher_regression(file_regression: FileRegressionFixture) -> 
     )
 
 
-def test_native_stretcher_retrieve_returns_rank_two_float32_memoryview() -> None:
+def test_native_stretcher_retrieve_returns_rank_two_audio_buffer() -> None:
     audio = sine_wave(seconds=1.0)
     stretcher = rubband.Stretcher(SAMPLE_RATE, 1)
 
     stretcher.study(audio, final=True)
     stretcher.process(audio, final=True)
     result = stretcher.retrieve()
+    view = memoryview(result.memoryview())  # ty: ignore[invalid-argument-type]
 
-    assert isinstance(result, memoryview)
-    assert result.format == "f"
-    assert result.itemsize == 4
-    assert result.ndim == 2
+    assert isinstance(result, rubband.AudioBuffer)
+    assert result.dtype == "float32"
+    assert result.frames == SAMPLE_RATE
+    assert result.channels == 1
     assert result.shape == (SAMPLE_RATE, 1)
-    assert result.c_contiguous
+    assert view.format == "f"
+    assert view.itemsize == 4
+    assert view.ndim == 2
+    assert view.c_contiguous
 
 
 def test_native_stretcher_accepts_dynamic_ratio_setters() -> None:
@@ -194,13 +218,14 @@ def test_native_stereo_outputs_have_matching_prefixes() -> None:
     )
 
     outputs = [
-        np.asarray(
+        cast(
+            NDArray[np.float32],
             rubband.stretch(
                 audio,
                 SAMPLE_RATE,
                 time_ratio=1.25,
                 pitch_scale=2.0,
-            )
+            ).numpy(),
         )
         for _ in range(8)
     ]
@@ -232,12 +257,13 @@ def test_native_pianolead_pitch_regression(
 ) -> None:
     audio, sample_rate = read_wav_float32(PIANO_LEAD)
 
-    result = np.asarray(
+    result = cast(
+        NDArray[np.float32],
         rubband.stretch(
             audio,
             sample_rate,
             pitch_scale=2.0 ** (semitones / 12.0),
-        )
+        ).numpy(),
     )
 
     assert result.shape[0] >= sample_rate

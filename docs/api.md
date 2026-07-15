@@ -4,6 +4,18 @@ This page is generated from the public Python API in `rubband`.
 
 ## Configuration
 
+::: rubband.AudioBuffer
+    options:
+      heading_level: 3
+      members:
+        - dtype
+        - frames
+        - channels
+        - shape
+        - memoryview
+        - numpy
+        - torch
+
 ::: rubband.Options
     options:
       heading_level: 3

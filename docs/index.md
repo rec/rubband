@@ -28,6 +28,8 @@ shifted = rubband.stretch(
     time_ratio=1.25,
     pitch_scale=2.0,
 )
+
+samples = shifted.memoryview()
 ```
 
 ## Input Constraints
@@ -39,7 +41,9 @@ shifted = rubband.stretch(
 - C-contiguous arrays only
 - sample rates from 8,000 to 192,000 Hz
 
-Outputs are `memoryview` objects over C-contiguous `float32` audio.
+Outputs are `AudioBuffer` objects over C-contiguous `float32` audio. Use
+`.memoryview()` for a zero-copy standard-library view, `.numpy()` for a NumPy
+view, or `.torch()` for a PyTorch CPU tensor view.
 
 ## Stateful Processing
 
@@ -53,6 +57,7 @@ stretcher = rubband.Stretcher(
 stretcher.process(audio, final=False)
 stretcher.set_pitch_scale(1.5)
 result = stretcher.retrieve()
+samples = result.memoryview()
 ```
 
 Dynamic `set_pitch_scale()` and `set_time_ratio()` changes are intended for
