@@ -18,6 +18,7 @@ def test_release_workflow_builds_platform_wheels() -> None:
     assert "rubberband/archive/refs/tags/v4.0.0.tar.gz" in workflow
     assert "sudo ninja -C build install" in workflow
     assert "vcpkg install rubberband:x64-windows" in workflow
+    assert "uv sync --dev --no-editable" in workflow
     assert "uv build --sdist --wheel --out-dir dist" in workflow
     assert "scripts/smoke_wheel.py" in workflow
     assert "gh release create" in workflow
