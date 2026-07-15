@@ -10,6 +10,7 @@ from threading import Lock
 from pydantic import (
     BaseModel,
     ConfigDict,
+    Field,
     PrivateAttr,
     field_validator,
 )
@@ -93,26 +94,81 @@ class Options(BaseModel):
     Time and pitch ratios are not options in Rubber Band itself. Pass them to
     `stretch()` or to `Stretcher` as `initial_time_ratio` and
     `initial_pitch_scale`.
+
+    Attributes:
+        preset: Rubber Band preset to apply before explicit option values.
+        process: Offline or real-time processing mode.
+        stretch: Time-stretching algorithm behavior.
+        transients: Transient preservation behavior.
+        detector: Transient detector tuned for the source material.
+        phase: Phase handling behavior.
+        threading: Rubber Band internal threading behavior.
+        window: Analysis window size.
+        smoothing: Whether Rubber Band smoothing is enabled.
+        formant: Formant handling while pitch shifting.
+        pitch: Pitch-shifting quality and consistency preference.
+        channels: Whether channels are processed independently or together.
+        engine: Rubber Band engine selection.
     """
 
     model_config = ConfigDict(frozen=True)
 
-    preset: PresetOption = PresetOption.default
-    process: ProcessOption = ProcessOption.offline
-    stretch: StretchOption = StretchOption.elastic
-    transients: TransientsOption = TransientsOption.crisp
-    detector: DetectorOption = DetectorOption.compound
-    phase: PhaseOption = PhaseOption.laminar
-    threading: ThreadingOption = ThreadingOption.never
-    window: WindowOption = WindowOption.standard
-    smoothing: SmoothingOption = SmoothingOption.off
-    formant: FormantOption = FormantOption.shifted
-    pitch: PitchOption = PitchOption.high_quality
-    channels: ChannelsOption = ChannelsOption.together
-    engine: EngineOption = EngineOption.finer
+    preset: PresetOption = Field(
+        default=PresetOption.default,
+        description="Rubber Band preset to apply before explicit option values.",
+    )
+    process: ProcessOption = Field(
+        default=ProcessOption.offline,
+        description="Offline or real-time processing mode.",
+    )
+    stretch: StretchOption = Field(
+        default=StretchOption.elastic,
+        description="Time-stretching algorithm behavior.",
+    )
+    transients: TransientsOption = Field(
+        default=TransientsOption.crisp,
+        description="Transient preservation behavior.",
+    )
+    detector: DetectorOption = Field(
+        default=DetectorOption.compound,
+        description="Transient detector tuned for the source material.",
+    )
+    phase: PhaseOption = Field(
+        default=PhaseOption.laminar,
+        description="Phase handling behavior.",
+    )
+    threading: ThreadingOption = Field(
+        default=ThreadingOption.never,
+        description="Rubber Band internal threading behavior.",
+    )
+    window: WindowOption = Field(
+        default=WindowOption.standard,
+        description="Analysis window size.",
+    )
+    smoothing: SmoothingOption = Field(
+        default=SmoothingOption.off,
+        description="Whether Rubber Band smoothing is enabled.",
+    )
+    formant: FormantOption = Field(
+        default=FormantOption.shifted,
+        description="Formant handling while pitch shifting.",
+    )
+    pitch: PitchOption = Field(
+        default=PitchOption.high_quality,
+        description="Pitch-shifting quality and consistency preference.",
+    )
+    channels: ChannelsOption = Field(
+        default=ChannelsOption.together,
+        description="Whether channels are processed independently or together.",
+    )
+    engine: EngineOption = Field(
+        default=EngineOption.finer,
+        description="Rubber Band engine selection.",
+    )
 
     @property
     def option_flags(self) -> int:
+        """Combined Rubber Band option bitmask for the current options."""
         return (
             _PRESET_OPTIONS[self.preset]
             | _PROCESS_OPTIONS[self.process]
@@ -131,31 +187,61 @@ class Options(BaseModel):
 
 
 class RubberBandMetadata(BaseModel):
-    """Read-only values reported by a configured Rubber Band stretcher."""
+    """Read-only values reported by a configured Rubber Band stretcher.
+
+    Attributes:
+        engine_version: Rubber Band engine version.
+        available: Initial available output frame count.
+        preferred_start_pad: Input frames Rubber Band recommends prepending.
+        start_delay: Output frames to discard after start padding.
+        time_ratio: Configured output-to-input duration ratio.
+        pitch_scale: Configured output-to-input pitch ratio.
+    """
 
     model_config = ConfigDict(frozen=True)
 
-    engine_version: int
-    available: int
-    preferred_start_pad: int
-    start_delay: int
-    time_ratio: float
-    pitch_scale: float
+    engine_version: int = Field(description="Rubber Band engine version.")
+    available: int = Field(description="Initial available output frame count.")
+    preferred_start_pad: int = Field(
+        description="Input frames Rubber Band recommends prepending before processing."
+    )
+    start_delay: int = Field(
+        description="Output frames to discard after start padding."
+    )
+    time_ratio: float = Field(description="Configured output-to-input duration ratio.")
+    pitch_scale: float = Field(description="Configured output-to-input pitch ratio.")
 
 
 class Stretcher(BaseModel):
-    """Stateful Rubber Band stretcher for offline or real-time processing."""
+    """Stateful Rubber Band stretcher for offline or real-time processing.
+
+    Args:
+        sample_rate: Input sample rate in Hz.
+        channels: Number of audio channels.
+        options: Rubber Band option flags used to construct the stretcher.
+        initial_time_ratio: Initial output-to-input duration ratio.
+        initial_pitch_scale: Initial output-to-input pitch ratio.
+    """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     _lock: Lock = PrivateAttr(default_factory=Lock)
     _started: bool = PrivateAttr(default=False)
 
-    sample_rate: int
-    channels: int
-    options: Options = Options()
-    initial_time_ratio: float = 1.0
-    initial_pitch_scale: float = 1.0
+    sample_rate: int = Field(description="Input sample rate in Hz.")
+    channels: int = Field(description="Number of audio channels.")
+    options: Options = Field(
+        default_factory=Options,
+        description="Rubber Band option flags used to construct the stretcher.",
+    )
+    initial_time_ratio: float = Field(
+        default=1.0,
+        description="Initial output-to-input duration ratio.",
+    )
+    initial_pitch_scale: float = Field(
+        default=1.0,
+        description="Initial output-to-input pitch ratio.",
+    )
 
     def __init__(
         self,
@@ -203,12 +289,26 @@ class Stretcher(BaseModel):
         )
 
     def study(self, audio: object, final: bool = False) -> None:
+        """Analyze audio before offline processing.
+
+        Args:
+            audio: Contiguous CPU float32 audio with shape ``(frames,)`` or
+                ``(frames, channels)``.
+            final: Whether this is the last audio block to study.
+        """
         normalized = _validate_stretcher_audio(audio, self.channels)
         with self._lock:
             self.native.study(normalized, final)
             self._started = True
 
     def process(self, audio: object, final: bool = False) -> None:
+        """Process audio and make output available through `retrieve()`.
+
+        Args:
+            audio: Contiguous CPU float32 audio with shape ``(frames,)`` or
+                ``(frames, channels)``.
+            final: Whether this is the last audio block to process.
+        """
         normalized = _validate_stretcher_audio(audio, self.channels)
         with self._lock:
             self.native.process(normalized, final)
@@ -221,81 +321,136 @@ class Stretcher(BaseModel):
             self._started = False
 
     def set_time_ratio(self, ratio: float) -> None:
-        """Set stretched-to-unstretched duration ratio."""
+        """Set the stretched-to-unstretched duration ratio.
+
+        Args:
+            ratio: Positive output-to-input duration ratio.
+        """
         ratio = _validate_positive_ratio(ratio)
         with self._lock:
             self._validate_dynamic_ratio_change()
             self.native.set_time_ratio(ratio)
 
     def set_pitch_scale(self, scale: float) -> None:
-        """Set target-to-source frequency ratio."""
+        """Set the target-to-source frequency ratio.
+
+        Args:
+            scale: Positive output-to-input pitch ratio.
+        """
         scale = _validate_positive_ratio(scale)
         with self._lock:
             self._validate_dynamic_ratio_change()
             self.native.set_pitch_scale(scale)
 
     def set_formant_scale(self, scale: float) -> None:
+        """Set Rubber Band's formant scale.
+
+        Args:
+            scale: Non-negative formant scale.
+        """
         scale = _validate_non_negative_ratio(scale)
         with self._lock:
             self.native.set_formant_scale(scale)
 
     def set_transients_option(self, option: TransientsOption) -> None:
+        """Set transient handling for a real-time stretcher.
+
+        Args:
+            option: Transient preservation behavior.
+        """
         self._validate_real_time_option_change("transients option")
         with self._lock:
             self.native.set_transients_option(_TRANSIENTS_OPTIONS[option])
 
     def set_detector_option(self, option: DetectorOption) -> None:
+        """Set transient detector behavior for a real-time stretcher.
+
+        Args:
+            option: Transient detector tuned for the source material.
+        """
         self._validate_real_time_option_change("detector option")
         with self._lock:
             self.native.set_detector_option(_DETECTOR_OPTIONS[option])
 
     def set_phase_option(self, option: PhaseOption) -> None:
+        """Set phase handling behavior.
+
+        Args:
+            option: Phase handling behavior.
+        """
         with self._lock:
             self.native.set_phase_option(_PHASE_OPTIONS[option])
 
     def set_formant_option(self, option: FormantOption) -> None:
+        """Set formant handling behavior.
+
+        Args:
+            option: Formant handling while pitch shifting.
+        """
         with self._lock:
             self.native.set_formant_option(_FORMANT_OPTIONS[option])
 
     def set_pitch_option(self, option: PitchOption) -> None:
+        """Set pitch processing behavior for a real-time stretcher.
+
+        Args:
+            option: Pitch-shifting quality and consistency preference.
+        """
         self._validate_real_time_option_change("pitch option")
         with self._lock:
             self.native.set_pitch_option(_PITCH_OPTIONS[option])
 
     def get_time_ratio(self) -> float:
+        """Return the current stretched-to-unstretched duration ratio."""
         with self._lock:
             return self.native.get_time_ratio()
 
     def get_pitch_scale(self) -> float:
+        """Return the current target-to-source pitch ratio."""
         with self._lock:
             return self.native.get_pitch_scale()
 
     def get_formant_scale(self) -> float:
+        """Return the current Rubber Band formant scale."""
         with self._lock:
             return self.native.get_formant_scale()
 
     def get_preferred_start_pad(self) -> int:
+        """Return the input frames Rubber Band recommends prepending."""
         with self._lock:
             return self.native.get_preferred_start_pad()
 
     def get_start_delay(self) -> int:
+        """Return the output frames to discard after start padding."""
         with self._lock:
             return self.native.get_start_delay()
 
     def get_latency(self) -> int:
+        """Return the processing latency in frames."""
         with self._lock:
             return self.native.get_latency()
 
     def get_channel_count(self) -> int:
+        """Return the configured channel count."""
         with self._lock:
             return self.native.get_channel_count()
 
     def set_expected_input_duration(self, samples: int) -> None:
+        """Set the expected input duration for offline processing.
+
+        Args:
+            samples: Non-negative expected input frame count.
+        """
         samples = _validate_sample_count(samples)
         with self._lock:
             self.native.set_expected_input_duration(samples)
 
     def set_max_process_size(self, samples: int) -> None:
+        """Set the maximum block size accepted by `process()`.
+
+        Args:
+            samples: Non-negative maximum input frame count per process call.
+        """
         samples = _validate_sample_count(samples)
         with self._lock:
             if self._started:
@@ -305,18 +460,26 @@ class Stretcher(BaseModel):
             self.native.set_max_process_size(samples)
 
     def get_process_size_limit(self) -> int:
+        """Return the current maximum process block size in frames."""
         with self._lock:
             return self.native.get_process_size_limit()
 
     def get_samples_required(self) -> int:
+        """Return the input frames required before more output can be produced."""
         with self._lock:
             return self.native.get_samples_required()
 
     def available(self) -> int:
+        """Return the number of output frames currently available."""
         with self._lock:
             return self.native.available()
 
     def retrieve(self) -> object:
+        """Return available output audio as a float32 `memoryview`.
+
+        Returns:
+            C-contiguous float32 output with shape ``(frames, channels)``.
+        """
         with self._lock:
             result = self.native.retrieve()
         _validate_result(result, self.channels)
@@ -345,6 +508,16 @@ def stretch(
     Input must be contiguous CPU float32 audio with shape ``(frames,)`` for
     mono or ``(frames, channels)`` for multichannel audio. Objects may expose
     DLPack or the Python buffer protocol.
+
+    Args:
+        audio: Contiguous CPU float32 input audio.
+        sample_rate: Input sample rate in Hz.
+        time_ratio: Output-to-input duration ratio.
+        pitch_scale: Output-to-input pitch ratio.
+        options: Rubber Band option flags for the one-shot stretcher.
+
+    Returns:
+        C-contiguous float32 output as a `memoryview`.
     """
     sample_rate = _validate_sample_rate(sample_rate)
     time_ratio = _validate_positive_ratio(time_ratio)
@@ -369,7 +542,18 @@ def metadata(
     pitch_scale: float = 1.0,
     options: Options | None = None,
 ) -> RubberBandMetadata:
-    """Return metadata for a Rubber Band stretcher configuration."""
+    """Return metadata for a Rubber Band stretcher configuration.
+
+    Args:
+        sample_rate: Input sample rate in Hz.
+        channels: Number of audio channels.
+        time_ratio: Output-to-input duration ratio.
+        pitch_scale: Output-to-input pitch ratio.
+        options: Rubber Band option flags for the metadata query.
+
+    Returns:
+        Read-only metadata for the configured stretcher.
+    """
     sample_rate = _validate_sample_rate(sample_rate)
     time_ratio = _validate_positive_ratio(time_ratio)
     pitch_scale = _validate_positive_ratio(pitch_scale)
