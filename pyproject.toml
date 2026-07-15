@@ -31,6 +31,9 @@ wheel.packages = ["rubband"]
 
 [dependency-groups]
 dev = [
+    "mkdocs>=1.6.1",
+    "mkdocs-material>=9.7.6",
+    "mkdocstrings[python]>=1.0.4",
     "pytest>=9.1.1",
     "pytest-regressions>=2.11.0",
     "pyupgrade>=3.21.2",
