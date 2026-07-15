@@ -28,7 +28,7 @@ def test_native_source_audio_regression(file_regression: FileRegressionFixture) 
     )
 
 
-def test_native_stretch_regression(file_regression: FileRegressionFixture) -> None:
+def test_native_stretch_preserves_pitch() -> None:
     audio = sine_wave(seconds=1.0)
 
     result = cast(
@@ -42,14 +42,11 @@ def test_native_stretch_regression(file_regression: FileRegressionFixture) -> No
 
     assert result.shape == (60_000,)
     assert np.max(np.abs(result)) > 0.1
-    file_regression.check(
-        wav_bytes(result),
-        extension=".wav",
-        binary=True,
-    )
+    assert np.all(np.isfinite(result))
+    assert dominant_frequency(result) == pytest.approx(440.0, abs=2.0)
 
 
-def test_native_pitch_shift_regression(file_regression: FileRegressionFixture) -> None:
+def test_native_pitch_shift_doubles_frequency() -> None:
     audio = sine_wave(seconds=1.0, hz=330.0)
 
     result = cast(
@@ -63,11 +60,8 @@ def test_native_pitch_shift_regression(file_regression: FileRegressionFixture) -
 
     assert result.shape == (SAMPLE_RATE,)
     assert np.max(np.abs(result)) > 0.1
-    file_regression.check(
-        wav_bytes(result),
-        extension=".wav",
-        binary=True,
-    )
+    assert np.all(np.isfinite(result))
+    assert dominant_frequency(result) == pytest.approx(660.0, abs=2.0)
 
 
 def test_native_accepts_dlpack_audio() -> None:
@@ -284,6 +278,16 @@ def sine_wave(seconds: float, hz: float = 440.0) -> NDArray[np.float32]:
         [math.sin(2.0 * math.pi * hz * i / SAMPLE_RATE) * 0.25 for i in range(frames)],
         dtype=np.float32,
     )
+
+
+def dominant_frequency(
+    audio: NDArray[np.float32],
+    sample_rate: int = SAMPLE_RATE,
+) -> float:
+    windowed = audio * np.hanning(audio.shape[0])
+    spectrum = np.fft.rfft(windowed)
+    frequencies = np.fft.rfftfreq(audio.shape[0], 1.0 / sample_rate)
+    return float(frequencies[int(np.argmax(np.abs(spectrum)))])
 
 
 def read_wav_float32(path: Path) -> tuple[NDArray[np.float32], int]:
