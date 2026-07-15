@@ -57,7 +57,18 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y librubberband-dev pkg-config
+          sudo apt-get install -y build-essential curl meson ninja-build pkg-config
+          curl -L --fail --silent --show-error \
+            https://github.com/breakfastquay/rubberband/archive/refs/tags/v4.0.0.tar.gz \
+            | tar -xz
+          cd rubberband-4.0.0
+          meson setup build \
+            -Dauto_features=disabled \
+            -Ddefault_library=shared
+          ninja -C build
+          sudo ninja -C build install
+          sudo ldconfig
+          echo "PKG_CONFIG_PATH=/usr/local/lib/pkgconfig:/usr/local/lib/x86_64-linux-gnu/pkgconfig:$PKG_CONFIG_PATH" >> "$GITHUB_ENV"
 
       - name: Install Windows Rubber Band
         if: runner.os == 'Windows'

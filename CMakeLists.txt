@@ -32,6 +32,34 @@ else()
             INTERFACE_INCLUDE_DIRECTORIES "${RUBBERBAND_INCLUDE_DIR}"
     )
     set(RUBBERBAND_TARGET rubberband::rubberband)
+    set(RUBBERBAND_INCLUDE_DIRS "${RUBBERBAND_INCLUDE_DIR}")
+endif()
+
+include(CheckCXXSourceCompiles)
+
+set(_RUBBAND_PREVIOUS_REQUIRED_INCLUDES "${CMAKE_REQUIRED_INCLUDES}")
+set(CMAKE_REQUIRED_INCLUDES "${RUBBERBAND_INCLUDE_DIRS}")
+check_cxx_source_compiles(
+    "
+    #include <rubberband/RubberBandStretcher.h>
+    #ifndef RUBBERBAND_API_MAJOR_VERSION
+    #error Rubber Band API version macros are unavailable.
+    #endif
+    #if RUBBERBAND_API_MAJOR_VERSION < 3
+    #error Rubber Band API 3.0 or newer is required.
+    #endif
+    int main() { return 0; }
+    "
+    RUBBAND_HAS_RUBBERBAND_API_3
+)
+set(CMAKE_REQUIRED_INCLUDES "${_RUBBAND_PREVIOUS_REQUIRED_INCLUDES}")
+
+if(NOT RUBBAND_HAS_RUBBERBAND_API_3)
+    message(
+        FATAL_ERROR
+        "Rubband requires Rubber Band API 3.0 or newer. Install Rubber Band "
+        "4.x and make it discoverable with pkg-config, CMAKE_PREFIX_PATH, or vcpkg."
+    )
 endif()
 
 nanobind_add_module(_rubband rubband/_rubband.cpp)

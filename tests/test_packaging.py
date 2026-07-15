@@ -11,7 +11,12 @@ def test_release_workflow_builds_platform_wheels() -> None:
     assert "ubuntu-22.04" in workflow
     assert "windows-latest" in workflow
     assert "brew install rubberband pkg-config" in workflow
-    assert "sudo apt-get install -y librubberband-dev pkg-config" in workflow
+    assert (
+        "sudo apt-get install -y build-essential curl meson ninja-build pkg-config"
+        in workflow
+    )
+    assert "rubberband/archive/refs/tags/v4.0.0.tar.gz" in workflow
+    assert "sudo ninja -C build install" in workflow
     assert "vcpkg install rubberband:x64-windows" in workflow
     assert "uv build --sdist --wheel --out-dir dist" in workflow
     assert "scripts/smoke_wheel.py" in workflow
@@ -34,6 +39,8 @@ def test_cmake_has_non_pkg_config_rubber_band_fallback() -> None:
     assert "pkg_check_modules(RUBBERBAND QUIET IMPORTED_TARGET rubberband)" in cmake
     assert "find_path(RUBBERBAND_INCLUDE_DIR rubberband/RubberBandStretcher.h)" in cmake
     assert "find_library(RUBBERBAND_LIBRARY" in cmake
+    assert "RUBBERBAND_API_MAJOR_VERSION < 3" in cmake
+    assert "Rubband requires Rubber Band API 3.0 or newer" in cmake
     assert "CMAKE_PREFIX_PATH, or vcpkg" in cmake
 
 
