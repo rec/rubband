@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import enum
+import math
 import sys
 from enum import StrEnum
 from functools import cached_property
@@ -122,8 +123,8 @@ class StretchOptions(BaseModel):
     @field_validator("time_ratio", "pitch_scale")
     @classmethod
     def validate_positive_ratio(cls, value: float) -> float:
-        if value <= 0:
-            raise ValueError("ratio must be greater than zero")
+        if not math.isfinite(value) or value <= 0:
+            raise ValueError("ratio must be finite and greater than zero")
         return value
 
     @property
@@ -160,6 +161,7 @@ class Stretcher(BaseModel):
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     _lock: Lock = PrivateAttr(default_factory=Lock)
+    _started: bool = PrivateAttr(default=False)
 
     sample_rate: int
     channels: int
@@ -208,11 +210,25 @@ class Stretcher(BaseModel):
         normalized = _validate_stretcher_audio(audio, self.channels)
         with self._lock:
             self.native.study(normalized, final)
+            self._started = True
 
     def process(self, audio: NDArray[np.float32], final: bool = False) -> None:
         normalized = _validate_stretcher_audio(audio, self.channels)
         with self._lock:
             self.native.process(normalized, final)
+            self._started = True
+
+    def set_time_ratio(self, ratio: float) -> None:
+        ratio = StretchOptions.validate_positive_ratio(ratio)
+        with self._lock:
+            self._validate_dynamic_ratio_change()
+            self.native.set_time_ratio(ratio)
+
+    def set_pitch_scale(self, scale: float) -> None:
+        scale = StretchOptions.validate_positive_ratio(scale)
+        with self._lock:
+            self._validate_dynamic_ratio_change()
+            self.native.set_pitch_scale(scale)
 
     def available(self) -> int:
         with self._lock:
@@ -223,6 +239,13 @@ class Stretcher(BaseModel):
             result = self.native.retrieve()
         _validate_result(result, self.channels)
         return result
+
+    def _validate_dynamic_ratio_change(self) -> None:
+        options = self.options or StretchOptions(sample_rate=self.sample_rate)
+        if options.process == ProcessOption.offline and self._started:
+            raise ValueError(
+                "offline stretchers cannot change ratios after study or process"
+            )
 
 
 def stretch(

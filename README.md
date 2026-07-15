@@ -17,6 +17,26 @@ shifted = rubband.stretch(
 )
 ```
 
+For stateful processing, use `Stretcher`:
+
+```python
+stretcher = rubband.Stretcher(
+    48_000,
+    2,
+    options=rubband.StretchOptions(
+        sample_rate=48_000,
+        process=rubband.ProcessOption.real_time,
+    ),
+)
+stretcher.process(audio, final=False)
+stretcher.set_pitch_scale(2.0)
+stretcher.set_time_ratio(0.75)
+```
+
+Dynamic `set_pitch_scale()` and `set_time_ratio()` changes are intended for
+real-time processing. In offline mode, call them before `study()` or
+`process()`; after either call, rubband raises `ValueError`.
+
 Input constraints:
 
 - `numpy.ndarray` only

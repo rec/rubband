@@ -77,6 +77,20 @@ def test_native_stretcher_regression(file_regression: FileRegressionFixture) -> 
     )
 
 
+def test_native_stretcher_accepts_dynamic_ratio_setters() -> None:
+    stretcher = rubband.Stretcher(
+        SAMPLE_RATE,
+        1,
+        options=rubband.StretchOptions(
+            sample_rate=SAMPLE_RATE,
+            process=rubband.ProcessOption.real_time,
+        ),
+    )
+
+    stretcher.set_time_ratio(0.75)
+    stretcher.set_pitch_scale(1.5)
+
+
 def test_native_stereo_outputs_have_matching_prefixes() -> None:
     audio = np.ascontiguousarray(
         np.column_stack(

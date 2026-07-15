@@ -13,6 +13,10 @@ class _NativeStretcher(Protocol):
 
     def process(self, audio: NDArray[np.float32], final: bool) -> None: ...
 
+    def set_time_ratio(self, ratio: float) -> None: ...
+
+    def set_pitch_scale(self, scale: float) -> None: ...
+
     def available(self) -> int: ...
 
     def retrieve(self) -> NDArray[np.float32]: ...
@@ -80,6 +84,12 @@ class Stretcher:
 
     def process(self, audio: NDArray[np.float32], final: bool) -> None:
         self.handle.process(np.asarray(audio, dtype=np.float32, order="F"), final)
+
+    def set_time_ratio(self, ratio: float) -> None:
+        self.handle.set_time_ratio(ratio)
+
+    def set_pitch_scale(self, scale: float) -> None:
+        self.handle.set_pitch_scale(scale)
 
     def available(self) -> int:
         return self.handle.available()

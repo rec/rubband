@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import math
 import wave
+from typing import cast
 
 import numpy as np
 import pytest
@@ -233,6 +234,8 @@ def test_stretcher_mirrors_streaming_lifecycle(
             assert option_flags == options.option_flags
             self.studied = False
             self.processed = False
+            self.time_ratio = time_ratio
+            self.pitch_scale = pitch_scale
 
         def study(self, audio: NDArray[np.float32], final: bool) -> None:
             assert audio.shape == (SAMPLE_RATE, 2)
@@ -243,6 +246,12 @@ def test_stretcher_mirrors_streaming_lifecycle(
             assert audio.shape == (SAMPLE_RATE, 2)
             assert final
             self.processed = True
+
+        def set_time_ratio(self, ratio: float) -> None:
+            self.time_ratio = ratio
+
+        def set_pitch_scale(self, scale: float) -> None:
+            self.pitch_scale = scale
 
         def available(self) -> int:
             return 3
@@ -264,6 +273,110 @@ def test_stretcher_mirrors_streaming_lifecycle(
 
     assert stretcher.available() == 3
     assert stretcher.retrieve().shape == (3, 2)
+
+
+def test_real_time_stretcher_accepts_dynamic_ratio_changes_after_processing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class NativeStretcher:
+        def __init__(
+            self,
+            sample_rate: int,
+            channels: int,
+            time_ratio: float,
+            pitch_scale: float,
+            option_flags: int,
+        ) -> None:
+            self.time_ratio = time_ratio
+            self.pitch_scale = pitch_scale
+
+        def study(self, audio: NDArray[np.float32], final: bool) -> None:
+            pass
+
+        def process(self, audio: NDArray[np.float32], final: bool) -> None:
+            pass
+
+        def set_time_ratio(self, ratio: float) -> None:
+            self.time_ratio = ratio
+
+        def set_pitch_scale(self, scale: float) -> None:
+            self.pitch_scale = scale
+
+        def available(self) -> int:
+            return 0
+
+        def retrieve(self) -> NDArray[np.float32]:
+            return np.zeros((0, 1), dtype=np.float32)
+
+    monkeypatch.setattr(_native, "Stretcher", NativeStretcher)
+    stretcher = rubband.Stretcher(
+        SAMPLE_RATE,
+        1,
+        options=rubband.StretchOptions(
+            sample_rate=SAMPLE_RATE,
+            process=rubband.ProcessOption.real_time,
+        ),
+    )
+
+    stretcher.process(sine_wave(seconds=1.0), final=False)
+    stretcher.set_time_ratio(0.75)
+    stretcher.set_pitch_scale(1.5)
+
+    native = cast(NativeStretcher, stretcher.native)
+    assert native.time_ratio == 0.75
+    assert native.pitch_scale == 1.5
+
+
+def test_offline_stretcher_rejects_dynamic_ratio_changes_after_processing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class NativeStretcher:
+        def __init__(
+            self,
+            sample_rate: int,
+            channels: int,
+            time_ratio: float,
+            pitch_scale: float,
+            option_flags: int,
+        ) -> None:
+            pass
+
+        def study(self, audio: NDArray[np.float32], final: bool) -> None:
+            pass
+
+        def process(self, audio: NDArray[np.float32], final: bool) -> None:
+            pass
+
+        def set_time_ratio(self, ratio: float) -> None:
+            pass
+
+        def set_pitch_scale(self, scale: float) -> None:
+            pass
+
+        def available(self) -> int:
+            return 0
+
+        def retrieve(self) -> NDArray[np.float32]:
+            return np.zeros((0, 1), dtype=np.float32)
+
+    monkeypatch.setattr(_native, "Stretcher", NativeStretcher)
+    stretcher = rubband.Stretcher(SAMPLE_RATE, 1)
+
+    stretcher.process(sine_wave(seconds=1.0), final=False)
+
+    with pytest.raises(ValueError, match="offline"):
+        stretcher.set_time_ratio(0.75)
+    with pytest.raises(ValueError, match="offline"):
+        stretcher.set_pitch_scale(1.5)
+
+
+def test_stretcher_rejects_non_finite_dynamic_ratios() -> None:
+    stretcher = rubband.Stretcher(SAMPLE_RATE, 1)
+
+    with pytest.raises(ValueError, match="finite"):
+        stretcher.set_time_ratio(math.inf)
+    with pytest.raises(ValueError, match="finite"):
+        stretcher.set_pitch_scale(math.nan)
 
 
 def test_stretcher_rejects_channel_mismatch() -> None:

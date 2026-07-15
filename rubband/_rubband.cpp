@@ -124,6 +124,14 @@ public:
         stretcher_.process(input_channels.data(), audio.shape(0), final);
     }
 
+    void set_time_ratio(double ratio) {
+        stretcher_.setTimeRatio(ratio);
+    }
+
+    void set_pitch_scale(double scale) {
+        stretcher_.setPitchScale(scale);
+    }
+
     int available() const {
         return stretcher_.available();
     }
@@ -211,6 +219,8 @@ NB_MODULE(_rubband, module) {
         )
         .def("study", &Stretcher::study, nb::arg("audio"), nb::arg("final") = false)
         .def("process", &Stretcher::process, nb::arg("audio"), nb::arg("final") = false)
+        .def("set_time_ratio", &Stretcher::set_time_ratio, nb::arg("ratio"))
+        .def("set_pitch_scale", &Stretcher::set_pitch_scale, nb::arg("scale"))
         .def("available", &Stretcher::available)
         .def("retrieve", &Stretcher::retrieve);
 
