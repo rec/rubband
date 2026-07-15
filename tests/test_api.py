@@ -3,11 +3,13 @@ from __future__ import annotations
 import io
 import math
 import wave
+from array import array
 from typing import cast
 
 import numpy as np
 import pytest
 from numpy.typing import NDArray
+from pytest_regressions.file_regression import FileRegressionFixture
 
 import rubband
 from rubband import _native
@@ -17,7 +19,7 @@ SAMPLE_RATE = 48_000
 
 def test_stretch_accepts_one_second_mono_audio(
     monkeypatch: pytest.MonkeyPatch,
-    file_regression: object,
+    file_regression: FileRegressionFixture,
 ) -> None:
     audio = sine_wave(seconds=1.0)
 
@@ -37,11 +39,14 @@ def test_stretch_accepts_one_second_mono_audio(
 
     monkeypatch.setattr(_native, "stretch_float32", stretch_float32)
 
-    result = rubband.stretch(
-        audio,
-        SAMPLE_RATE,
-        time_ratio=1.25,
-        pitch_scale=0.5,
+    result = cast(
+        NDArray[np.float32],
+        rubband.stretch(
+            audio,
+            SAMPLE_RATE,
+            time_ratio=1.25,
+            pitch_scale=0.5,
+        ),
     )
 
     assert result.shape == (SAMPLE_RATE,)
@@ -54,7 +59,7 @@ def test_stretch_accepts_one_second_mono_audio(
 
 def test_stretch_accepts_one_second_stereo_audio(
     monkeypatch: pytest.MonkeyPatch,
-    file_regression: object,
+    file_regression: FileRegressionFixture,
 ) -> None:
     audio = np.column_stack((sine_wave(seconds=1.0), sine_wave(seconds=1.0, hz=660)))
 
@@ -73,10 +78,13 @@ def test_stretch_accepts_one_second_stereo_audio(
 
     monkeypatch.setattr(_native, "stretch_float32", stretch_float32)
 
-    result = rubband.stretch(
-        np.ascontiguousarray(audio, dtype=np.float32),
-        SAMPLE_RATE,
-        pitch_scale=2.0,
+    result = cast(
+        NDArray[np.float32],
+        rubband.stretch(
+            np.ascontiguousarray(audio, dtype=np.float32),
+            SAMPLE_RATE,
+            pitch_scale=2.0,
+        ),
     )
 
     assert result.shape == (SAMPLE_RATE, 2)
@@ -87,12 +95,65 @@ def test_stretch_accepts_one_second_stereo_audio(
     )
 
 
+def test_stretch_accepts_array_buffer_audio(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    audio = array("f", [0.0] * SAMPLE_RATE)
+
+    def stretch_float32(
+        backend_audio: object,
+        sample_rate: int,
+        time_ratio: float,
+        pitch_scale: float,
+        option_flags: int,
+    ) -> array[float]:
+        view = memoryview(backend_audio)  # ty: ignore[invalid-argument-type]
+        assert view.format == "f"
+        assert view.shape == (SAMPLE_RATE,)
+        return array("f", [0.0] * SAMPLE_RATE)
+
+    monkeypatch.setattr(_native, "stretch_float32", stretch_float32)
+
+    result = rubband.stretch(audio, SAMPLE_RATE)
+
+    view = memoryview(result)  # ty: ignore[invalid-argument-type]
+    assert view.format == "f"
+    assert view.shape == (SAMPLE_RATE,)
+
+
+def test_stretch_accepts_memoryview_audio(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    audio = memoryview(array("f", [0.0] * SAMPLE_RATE))
+
+    def stretch_float32(
+        backend_audio: object,
+        sample_rate: int,
+        time_ratio: float,
+        pitch_scale: float,
+        option_flags: int,
+    ) -> array[float]:
+        assert backend_audio is audio
+        return array("f", [0.0] * SAMPLE_RATE)
+
+    monkeypatch.setattr(_native, "stretch_float32", stretch_float32)
+
+    result = rubband.stretch(audio, SAMPLE_RATE)
+
+    assert memoryview(result).shape == (SAMPLE_RATE,)  # ty: ignore[invalid-argument-type]
+
+
 def test_stretch_rejects_non_array_protocol_audio() -> None:
     with pytest.raises(TypeError, match="DLPack or the Python buffer protocol"):
         rubband.stretch(
             [0.0],  # type: ignore[arg-type]
             SAMPLE_RATE,
         )
+
+
+def test_stretch_rejects_non_float32_buffer_audio() -> None:
+    with pytest.raises(TypeError, match="float32"):
+        rubband.stretch(array("d", [0.0] * SAMPLE_RATE), SAMPLE_RATE)
 
 
 def test_stretch_rejects_non_float32_audio() -> None:
@@ -109,6 +170,25 @@ def test_stretch_rejects_non_contiguous_audio() -> None:
     audio = np.zeros((SAMPLE_RATE, 2), dtype=np.float32)[::2]
 
     with pytest.raises(ValueError, match="C-contiguous"):
+        rubband.stretch(audio, SAMPLE_RATE)
+
+
+def test_stretch_rejects_empty_audio() -> None:
+    with pytest.raises(ValueError, match="at least one frame"):
+        rubband.stretch(np.zeros(0, dtype=np.float32), SAMPLE_RATE)
+
+
+def test_stretch_rejects_empty_channel_dimension() -> None:
+    audio = np.zeros((SAMPLE_RATE, 0), dtype=np.float32)
+
+    with pytest.raises(ValueError, match="at least one channel"):
+        rubband.stretch(audio, SAMPLE_RATE)
+
+
+def test_stretch_rejects_rank_three_audio() -> None:
+    audio = np.zeros((SAMPLE_RATE, 1, 1), dtype=np.float32)
+
+    with pytest.raises(ValueError, match=r"shape \(frames,\) or \(frames, channels\)"):
         rubband.stretch(audio, SAMPLE_RATE)
 
 
@@ -304,7 +384,8 @@ def test_stretcher_mirrors_streaming_lifecycle(
     stretcher.process(audio, final=True)
 
     assert stretcher.available() == 3
-    assert stretcher.retrieve().shape == (3, 2)
+    result = cast(NDArray[np.float32], stretcher.retrieve())
+    assert result.shape == (3, 2)
 
 
 def test_stretcher_exposes_original_accessor_methods(
@@ -458,6 +539,42 @@ def test_backend_load_failure_exits_without_traceback(
 
     assert "could not load its native Rubber Band extension" in str(error.value)
     assert "missing rubband._rubband" in str(error.value)
+
+
+def test_documented_public_callables_have_docstrings() -> None:
+    public_callables = [
+        rubband.stretch,
+        rubband.metadata,
+        rubband.Options.option_flags.fget,
+        rubband.Stretcher.study,
+        rubband.Stretcher.process,
+        rubband.Stretcher.reset,
+        rubband.Stretcher.set_time_ratio,
+        rubband.Stretcher.set_pitch_scale,
+        rubband.Stretcher.set_formant_scale,
+        rubband.Stretcher.set_transients_option,
+        rubband.Stretcher.set_detector_option,
+        rubband.Stretcher.set_phase_option,
+        rubband.Stretcher.set_formant_option,
+        rubband.Stretcher.set_pitch_option,
+        rubband.Stretcher.get_time_ratio,
+        rubband.Stretcher.get_pitch_scale,
+        rubband.Stretcher.get_formant_scale,
+        rubband.Stretcher.get_preferred_start_pad,
+        rubband.Stretcher.get_start_delay,
+        rubband.Stretcher.get_latency,
+        rubband.Stretcher.get_channel_count,
+        rubband.Stretcher.set_expected_input_duration,
+        rubband.Stretcher.set_max_process_size,
+        rubband.Stretcher.get_process_size_limit,
+        rubband.Stretcher.get_samples_required,
+        rubband.Stretcher.available,
+        rubband.Stretcher.retrieve,
+    ]
+
+    for function in public_callables:
+        assert function is not None
+        assert function.__doc__
 
 
 class FakeNativeStretcher:
