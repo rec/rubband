@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import sys
+from functools import cache
 from typing import Protocol, cast
 
 import numpy as np
@@ -95,7 +96,9 @@ def _backend_load_error(error: BaseException) -> str:
     )
 
 
-_rubband = _load_backend()
+@cache
+def _backend() -> _RubbandBackend:
+    return _load_backend()
 
 
 class Stretcher:
@@ -107,7 +110,7 @@ class Stretcher:
         pitch_scale: float,
         option_flags: int,
     ) -> None:
-        self.handle = _rubband.Stretcher(
+        self.handle = _backend().Stretcher(
             sample_rate,
             channels,
             time_ratio,
@@ -195,7 +198,7 @@ def metadata(
     pitch_scale: float,
     option_flags: int,
 ) -> dict[str, int | float]:
-    return _rubband.metadata(
+    return _backend().metadata(
         sample_rate,
         channels,
         time_ratio,
@@ -212,7 +215,7 @@ def stretch_float32(
     option_flags: int,
 ) -> NDArray[np.float32]:
     planar = np.asarray(audio, dtype=np.float32, order="F")
-    result = _rubband.stretch_float32(
+    result = _backend().stretch_float32(
         planar,
         sample_rate,
         time_ratio,
