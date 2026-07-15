@@ -4,6 +4,7 @@ import io
 import math
 import wave
 from array import array
+from pathlib import Path
 from typing import cast
 
 import numpy as np
@@ -89,6 +90,18 @@ def test_stretch_accepts_one_second_stereo_audio(
         extension=".wav",
         binary=True,
     )
+
+
+def test_windows_dll_directories_include_vcpkg_root(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    monkeypatch.setenv("VCPKG_INSTALLATION_ROOT", str(tmp_path))
+
+    directories = _native._windows_dll_directories()
+
+    assert Path(_native.__file__).resolve().parent in directories
+    assert tmp_path / "installed" / "x64-windows" / "bin" in directories
 
 
 def test_stretch_accepts_array_buffer_audio(

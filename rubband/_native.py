@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import importlib
+import os
 import sys
 from functools import cache
+from pathlib import Path
 from typing import Protocol, cast
+
+_DLL_DIRECTORY_HANDLES: list[object] = []
 
 
 class _NativeStretcher(Protocol):
@@ -80,9 +84,26 @@ class _RubbandBackend(Protocol):
 
 def _load_backend() -> _RubbandBackend:
     try:
+        _add_windows_dll_directories()
         return cast(_RubbandBackend, importlib.import_module("rubband._rubband"))
     except (ImportError, OSError) as e:
         sys.exit(_backend_load_error(e))
+
+
+def _add_windows_dll_directories() -> None:
+    if sys.platform != "win32":
+        return
+    for path in _windows_dll_directories():
+        if path.is_dir():
+            _DLL_DIRECTORY_HANDLES.append(os.add_dll_directory(path))
+
+
+def _windows_dll_directories() -> tuple[Path, ...]:
+    directories = [Path(__file__).resolve().parent]
+    for name in ("VCPKG_INSTALLATION_ROOT", "VCPKG_ROOT"):
+        if root := os.environ.get(name):
+            directories.append(Path(root) / "installed" / "x64-windows" / "bin")
+    return tuple(directories)
 
 
 def _backend_load_error(error: BaseException) -> str:
