@@ -34,7 +34,7 @@ else()
     set(RUBBERBAND_TARGET rubberband::rubberband)
 endif()
 
-nanobind_add_module(_rubband src/rubband/_rubband.cpp)
+nanobind_add_module(_rubband rubband/_rubband.cpp)
 target_compile_features(_rubband PRIVATE cxx_std_17)
 target_link_libraries(_rubband PRIVATE "${RUBBERBAND_TARGET}")
 

@@ -30,6 +30,7 @@ def test_release_script_builds_and_smokes_wheel() -> None:
 def test_cmake_has_non_pkg_config_rubber_band_fallback() -> None:
     cmake = Path("CMakeLists.txt").read_text()
 
+    assert "nanobind_add_module(_rubband rubband/_rubband.cpp)" in cmake
     assert "pkg_check_modules(RUBBERBAND QUIET IMPORTED_TARGET rubberband)" in cmake
     assert "find_path(RUBBERBAND_INCLUDE_DIR rubberband/RubberBandStretcher.h)" in cmake
     assert "find_library(RUBBERBAND_LIBRARY" in cmake

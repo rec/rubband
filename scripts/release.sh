@@ -39,10 +39,10 @@ uv pip install --reinstall "$wheel"
 
 .venv/bin/pytest
 .venv/bin/pytest --run-long tests/test_native.py::test_native_pianolead_pitch_regression
-.venv/bin/ruff check --fix --select B,E,F,I src tests scripts
-.venv/bin/ruff format src tests scripts
-.venv/bin/ty check src/rubband
-find tests src scripts -name '*.py' | xargs .venv/bin/pyupgrade --py313-plus
+.venv/bin/ruff check --fix --select B,E,F,I rubband tests scripts
+.venv/bin/ruff format rubband tests scripts
+.venv/bin/ty check rubband
+find tests rubband scripts -name '*.py' | xargs .venv/bin/pyupgrade --py313-plus
 git diff --check
 
 if [[ -n "$(git status --porcelain)" ]]; then
