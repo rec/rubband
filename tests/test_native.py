@@ -94,6 +94,35 @@ def test_native_accepts_memoryview_audio() -> None:
     assert np.max(np.abs(result)) > 0.1
 
 
+def test_native_accepts_contiguous_torch_cpu_tensor() -> None:
+    torch = pytest.importorskip("torch")
+    frames = torch.arange(SAMPLE_RATE, dtype=torch.float32)
+    audio = torch.sin(2.0 * math.pi * 440.0 * frames / SAMPLE_RATE) * 0.25
+
+    result = np.asarray(rubband.stretch(audio, SAMPLE_RATE))
+
+    assert result.shape == (SAMPLE_RATE,)
+    assert np.max(np.abs(result)) > 0.1
+
+
+def test_native_rejects_non_contiguous_torch_cpu_tensor() -> None:
+    torch = pytest.importorskip("torch")
+    audio = torch.zeros((2, SAMPLE_RATE), dtype=torch.float32).transpose(0, 1)
+
+    with pytest.raises(TypeError):
+        rubband.stretch(audio, SAMPLE_RATE)
+
+
+def test_native_rejects_torch_cuda_tensor() -> None:
+    torch = pytest.importorskip("torch")
+    if not torch.cuda.is_available():
+        pytest.skip("CUDA is not available")
+    audio = torch.zeros(SAMPLE_RATE, dtype=torch.float32, device="cuda")
+
+    with pytest.raises(TypeError):
+        rubband.stretch(audio, SAMPLE_RATE)
+
+
 def test_native_stretch_returns_float32_memoryview() -> None:
     result = rubband.stretch(sine_wave(seconds=1.0), SAMPLE_RATE)
 
