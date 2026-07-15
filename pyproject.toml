@@ -1,6 +1,6 @@
 [project]
 name = "rubband"
-version = "0.1.1"
+version = "0.1.2"
 description = "Python bindings for Rubber Band audio pitch shifting and time stretching"
 readme = "README.md"
 license = "LGPL-2.1-only"
