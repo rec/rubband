@@ -49,6 +49,9 @@ jobs:
 
       - uses: astral-sh/setup-uv@v6
 
+      - uses: ilammy/msvc-dev-cmd@v1
+        if: runner.os == 'Windows'
+
       - name: Install macOS Rubber Band
         if: runner.os == 'macOS'
         run: brew install rubberband pkg-config
@@ -74,7 +77,9 @@ jobs:
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
+          choco install ninja --no-progress
           vcpkg install rubberband:x64-windows
+          "CMAKE_GENERATOR=Ninja" | Out-File -FilePath $env:GITHUB_ENV -Append
           "CMAKE_ARGS=-DCMAKE_TOOLCHAIN_FILE=$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake" | Out-File -FilePath $env:GITHUB_ENV -Append
           "$env:VCPKG_INSTALLATION_ROOT/installed/x64-windows/bin" | Out-File -FilePath $env:GITHUB_PATH -Append
 
