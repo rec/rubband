@@ -1,9 +1,10 @@
-# ➰ `rubband`: tensor-friendly bindings to the C++ Rubber Band pitch shifting library ➰
+# ➰ `rubband`: tensor-friendly bindings for the C++ Rubber Band pitch shifting library ➰
 
 ## What is this?
 
 Rubber Band is a popular GPL C++ library for pitch shifting and time stretching with a
-long history, but all the Python bindings for it are old and unsupported.
+long history, but all the Python bindings for it are old and unsupported and only use
+Rubber Band 3 or earlier - but version 4 has some significant new features
 
 This new one uses [nanobind](https://nanobind.readthedocs.io/en/latest/) for the
 bindings, and [DLPack](https://dmlc.github.io/dlpack/latest/) to interoperate with all
@@ -23,7 +24,7 @@ and all the documentation except this part was written by Codex.
 I was positively surprised by the quality, and I think it is quite acceptable.  There
 are copious tests, and I am very responsive to issues filed.
 
-## If you're human, why is there an emoji in the description of this project??
+## If you're human, why is there an emoji in the description of this project?
 
 I've been using emojis in project descriptions for about six years. They learned it from me.
 
