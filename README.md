@@ -40,11 +40,21 @@ brew install rubberband pkg-config
 pip install rubband
 ```
 
-On Debian or Ubuntu:
+On Linux, Rubber Band API 3.0 or newer is required. Many stable
+distributions still package older Rubber Band headers, so build and install
+Rubber Band 4.x first if your distribution package is too old:
 
 ```sh
 sudo apt-get update
-sudo apt-get install -y librubberband-dev pkg-config
+sudo apt-get install -y build-essential curl meson ninja-build pkg-config
+curl -L --fail --silent --show-error \
+  https://github.com/breakfastquay/rubberband/archive/refs/tags/v4.0.0.tar.gz \
+  | tar -xz
+cd rubberband-4.0.0
+meson setup build -Dauto_features=disabled -Ddefault_library=shared
+ninja -C build
+sudo ninja -C build install
+sudo ldconfig
 pip install rubband
 ```
 
