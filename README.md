@@ -1,13 +1,13 @@
-# ➰ `rubband`: a tensor-friendly binding to the C++ Rubber Band pitch shifting library ➰
+# ➰ `rubband`: tensor-friendly bindings to the C++ Rubber Band pitch shifting library ➰
 
 ## What is this?
 
-The C++ Rubber Band library is a very popular pitch shifting library with a long
-history, but all the Python bindings for it are old and unsupported.
+Rubber Band is a popular GPL C++ library for pitch shifting and time stretching with a
+long history, but all the Python bindings for it are old and unsupported.
 
-This new one uses [nanobind](https://nanobind.readthedocs.io/en/latest/) to bind to the
-C++ library, and [DLPack](https://dmlc.github.io/dlpack/latest/) to allow interoperation
-with all common types of tensors.
+This new one uses [nanobind](https://nanobind.readthedocs.io/en/latest/), and
+[DLPack](https://dmlc.github.io/dlpack/latest/) interoperate with all common
+tensor types.
 
 ## You wrote this rather fast. Is this AI slop?
 
@@ -17,8 +17,8 @@ stuff.](https://github.com/rec) - and until June of 2026, every bit (hah!) was d
 hand.
 
 `rubband` is my first entirely "vibe coded" library. While I carefully guided it at each
-point, backed up and tried again a couple of times, reviewed every line of the code and that
-sort of thing, the code and nearly all the documentation was written by Codex.
+point, backed up and tried again a couple of times, and reviewed every line, the code
+and nearly all the documentation was written by Codex.
 
 I was positively surprised by the quality, and I think it is quite acceptable.
 There are copious tests, and I am very responsive to issues filed.
@@ -27,7 +27,7 @@ There are copious tests, and I am very responsive to issues filed.
 
 I've been using emojis in project descriptions for about six years. They learned it from me.
 
-## Nothing below this line was written by a person.
+#### Nothing below this line was written by a person.
 
 ------
 
