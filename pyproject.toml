@@ -20,6 +20,12 @@ classifiers = [
     "Topic :: Multimedia :: Sound/Audio",
 ]
 
+[project.urls]
+Documentation = "https://rec.github.io/rubband/"
+Homepage = "https://github.com/rec/rubband"
+Issues = "https://github.com/rec/rubband/issues"
+Source = "https://github.com/rec/rubband"
+
 [project.scripts]
 rubband = "rubband:main"
 
