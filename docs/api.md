@@ -22,6 +22,12 @@ This page is generated from the public Python API in `rubband`.
       members:
         - option_flags
 
+::: rubband.LiveOptions
+    options:
+      heading_level: 3
+      members:
+        - option_flags
+
 ::: rubband.RubberBandMetadata
     options:
       heading_level: 3
@@ -56,6 +62,36 @@ This page is generated from the public Python API in `rubband`.
         - get_samples_required
         - available
         - retrieve
+        - get_engine_version
+        - set_key_frame_map
+        - get_frequency_cutoff
+        - set_frequency_cutoff
+        - get_input_increment
+        - get_output_increments
+        - get_phase_reset_curve
+        - get_exact_time_points
+        - set_debug_level
+        - set_default_debug_level
+
+## Live Pitch Shifting
+
+::: rubband.LiveShifter
+    options:
+      heading_level: 3
+      members:
+        - reset
+        - set_pitch_scale
+        - set_formant_scale
+        - get_pitch_scale
+        - get_formant_scale
+        - get_start_delay
+        - get_channel_count
+        - set_formant_option
+        - get_block_size
+        - shift
+        - shift_into
+        - set_debug_level
+        - set_default_debug_level
 
 ## Convenience Functions
 
@@ -166,3 +202,30 @@ The enum values below map directly to Rubber Band option groups.
 | --- | --- |
 | `faster` | Use Rubber Band's faster engine. |
 | `finer` | Use Rubber Band's finer engine. |
+
+### `LivePresetOption`
+
+| Value | Meaning |
+| --- | --- |
+| `default` | Use explicit live option values. |
+
+### `LiveWindowOption`
+
+| Value | Meaning |
+| --- | --- |
+| `short` | Use the shortest live shifter window. |
+| `medium` | Use Rubber Band Live's medium window. |
+
+### `LiveFormantOption`
+
+| Value | Meaning |
+| --- | --- |
+| `shifted` | Shift formants with pitch. |
+| `preserved` | Preserve formants while shifting pitch. |
+
+### `LiveChannelsOption`
+
+| Value | Meaning |
+| --- | --- |
+| `apart` | Process live channels separately. |
+| `together` | Process live channels together. |

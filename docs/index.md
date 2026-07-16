@@ -8,6 +8,7 @@ The API stays close to Rubber Band's own model:
 
 - `Options` contains Rubber Band option flags.
 - `Stretcher` wraps the stateful Rubber Band stretcher.
+- `LiveShifter` wraps Rubber Band 4.x's block-based live pitch shifter.
 - `stretch()` provides a small offline convenience function.
 
 See the [API reference](api.md) for generated documentation with signatures and
@@ -63,3 +64,19 @@ samples = result.memoryview()
 Dynamic `set_pitch_scale()` and `set_time_ratio()` changes are intended for
 real-time processing. In offline mode, call them before `study()` or
 `process()`.
+
+## Live Pitch Shifting
+
+```python
+shifter = rubband.LiveShifter(48_000, 1)
+block_size = shifter.get_block_size()
+
+block = audio[:block_size]
+shifted = shifter.shift(block)
+samples = shifted.memoryview()
+```
+
+`LiveShifter` follows Rubber Band 4.x's fixed-block live pitch-shifting API:
+each `shift()` or `shift_into()` call must use exactly `get_block_size()`
+frames. The native Rubber Band object is designed for live use, but Python
+calls are not guaranteed hard real-time safe.

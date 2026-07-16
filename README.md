@@ -171,6 +171,24 @@ stretcher.process(audio, final=True)
 output = stretcher.retrieve()
 ```
 
+For Rubber Band 4.x live pitch shifting:
+
+```python
+import numpy as np
+import rubband
+
+shifter = rubband.LiveShifter(48_000, 1)
+block_size = shifter.get_block_size()
+audio = np.zeros(block_size, dtype=np.float32)
+
+output = shifter.shift(audio)
+```
+
+`LiveShifter` uses Rubber Band's fixed-block live API. Each `shift()` or
+`shift_into()` call must use exactly `get_block_size()` frames. The native
+Rubber Band object is intended for live use, but Python calls are not
+guaranteed hard real-time safe.
+
 ### Platform support
 
 Release builds are configured for:
@@ -210,6 +228,8 @@ distributing, or deploying software that uses `rubband`.
 - Audio input must be CPU, contiguous, `float32` memory.
 - GPU tensors are not supported.
 - Source builds require Rubber Band 4.x to be installed separately.
+- `LiveShifter` follows Rubber Band's live API, but Python itself is not a
+  hard real-time runtime.
 - Dynamic ratio changes are for real-time `Stretcher` use. Offline stretchers
   reject ratio changes after `study()` or `process()` starts.
 
@@ -237,6 +257,7 @@ wheels in `wheelhouse`.
 - Python 3.11+.
 - Rubber Band-backed time stretching and pitch shifting.
 - Stateful `Stretcher` API close to Rubber Band's original model.
+- Rubber Band 4.x `LiveShifter` API for fixed-block live pitch shifting.
 - DLPack and Python buffer protocol input support.
 - NumPy is not required at runtime.
 - PyTorch CPU tensors are supported when PyTorch is installed.
