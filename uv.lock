@@ -7,7 +7,7 @@ resolution-markers = [
 ]
 
 [options]
-exclude-newer = "2026-07-08T22:47:49.944127Z"
+exclude-newer = "2026-07-09T10:00:41.655995Z"
 exclude-newer-span = "P1W"
 
 [[package]]
@@ -1142,7 +1142,7 @@ wheels = [
 
 [[package]]
 name = "rubband"
-version = "0.1.5"
+version = "0.1.6"
 source = { editable = "." }
 dependencies = [
     { name = "pydantic" },
