@@ -245,6 +245,16 @@ def test_stretch_options_include_rubber_band_presets() -> None:
     assert options.option_flags == 0x32112000
 
 
+def test_live_options_represent_rubber_band_live_option_groups() -> None:
+    options = rubband.LiveOptions(
+        window=rubband.LiveWindowOption.medium,
+        formant=rubband.LiveFormantOption.preserved,
+        channels=rubband.LiveChannelsOption.together,
+    )
+
+    assert options.option_flags == 0x11100000
+
+
 def test_metadata_returns_accessors(monkeypatch: pytest.MonkeyPatch) -> None:
     options = rubband.Options()
 
@@ -432,6 +442,42 @@ def test_stretcher_exposes_original_accessor_methods(
     assert native.formant_option == 0x01000000
 
 
+def test_stretcher_exposes_rubber_band_4_methods(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_native, "Stretcher", FakeNativeStretcher)
+    stretcher = rubband.Stretcher(SAMPLE_RATE, 1)
+
+    stretcher.set_key_frame_map({0: 0, 48_000: 72_000})
+    stretcher.set_frequency_cutoff(1, 880.0)
+    stretcher.set_debug_level(1)
+    rubband.Stretcher.set_default_debug_level(0)
+
+    native = cast(FakeNativeStretcher, stretcher.native)
+    assert stretcher.get_engine_version() == 3
+    assert stretcher.get_frequency_cutoff(1) == 880.0
+    assert stretcher.get_input_increment() == 512
+    assert stretcher.get_output_increments() == [128, 256]
+    assert stretcher.get_phase_reset_curve() == [0.0, 0.5]
+    assert stretcher.get_exact_time_points() == [100, 200]
+    assert native.key_frame_map == {0: 0, 48_000: 72_000}
+    assert native.debug_level == 1
+
+
+def test_stretcher_rejects_invalid_key_frame_map(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_native, "Stretcher", FakeNativeStretcher)
+    stretcher = rubband.Stretcher(SAMPLE_RATE, 1)
+
+    with pytest.raises(ValueError, match="sample count"):
+        stretcher.set_key_frame_map({0: -1})
+
+    stretcher.process(sine_wave(seconds=1.0), final=False)
+    with pytest.raises(ValueError, match="key frame map"):
+        stretcher.set_key_frame_map({0: 0})
+
+
 def test_real_time_stretcher_accepts_original_option_mutators(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -528,6 +574,53 @@ def test_stretcher_rejects_invalid_sample_counts() -> None:
         stretcher.set_max_process_size(-1)
 
 
+def test_live_shifter_mirrors_rubber_band_live_lifecycle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_native, "LiveShifter", FakeNativeLiveShifter)
+    audio = sine_wave(seconds=1.0)[:128]
+    output = np.zeros(128, dtype=np.float32)
+    shifter = rubband.LiveShifter(
+        SAMPLE_RATE,
+        1,
+        options=rubband.LiveOptions(
+            window=rubband.LiveWindowOption.medium,
+            formant=rubband.LiveFormantOption.preserved,
+            channels=rubband.LiveChannelsOption.together,
+        ),
+    )
+
+    shifter.set_pitch_scale(1.5)
+    shifter.set_formant_scale(0.75)
+    shifter.set_formant_option(rubband.LiveFormantOption.shifted)
+    shifter.set_debug_level(1)
+    rubband.LiveShifter.set_default_debug_level(0)
+    result = shifter.shift(audio)
+    shifter.shift_into(audio, output)
+
+    native = cast(FakeNativeLiveShifter, shifter.native)
+    assert shifter.get_pitch_scale() == 1.5
+    assert shifter.get_formant_scale() == 0.75
+    assert shifter.get_start_delay() == 32
+    assert shifter.get_channel_count() == 1
+    assert shifter.get_block_size() == 128
+    assert result.shape == (128,)
+    np.testing.assert_array_equal(output, audio)
+    assert native.option_flags == 0x11100000
+    assert native.formant_option == 0
+    assert native.debug_level == 1
+
+
+def test_live_shifter_rejects_wrong_block_size(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_native, "LiveShifter", FakeNativeLiveShifter)
+    shifter = rubband.LiveShifter(SAMPLE_RATE, 1)
+
+    with pytest.raises(ValueError, match="block size"):
+        shifter.shift(np.zeros(127, dtype=np.float32))
+
+
 def test_backend_load_error_is_clear() -> None:
     message = _native._backend_load_error(ImportError("Library not loaded"))
 
@@ -564,6 +657,7 @@ def test_documented_public_callables_have_docstrings() -> None:
         rubband.AudioBuffer.numpy,
         rubband.AudioBuffer.torch,
         rubband.Options.option_flags.fget,
+        rubband.LiveOptions.option_flags.fget,
         rubband.Stretcher.study,
         rubband.Stretcher.process,
         rubband.Stretcher.reset,
@@ -588,6 +682,29 @@ def test_documented_public_callables_have_docstrings() -> None:
         rubband.Stretcher.get_samples_required,
         rubband.Stretcher.available,
         rubband.Stretcher.retrieve,
+        rubband.Stretcher.get_engine_version,
+        rubband.Stretcher.set_key_frame_map,
+        rubband.Stretcher.get_frequency_cutoff,
+        rubband.Stretcher.set_frequency_cutoff,
+        rubband.Stretcher.get_input_increment,
+        rubband.Stretcher.get_output_increments,
+        rubband.Stretcher.get_phase_reset_curve,
+        rubband.Stretcher.get_exact_time_points,
+        rubband.Stretcher.set_debug_level,
+        rubband.Stretcher.set_default_debug_level,
+        rubband.LiveShifter.reset,
+        rubband.LiveShifter.set_pitch_scale,
+        rubband.LiveShifter.set_formant_scale,
+        rubband.LiveShifter.get_pitch_scale,
+        rubband.LiveShifter.get_formant_scale,
+        rubband.LiveShifter.get_start_delay,
+        rubband.LiveShifter.get_channel_count,
+        rubband.LiveShifter.set_formant_option,
+        rubband.LiveShifter.get_block_size,
+        rubband.LiveShifter.shift,
+        rubband.LiveShifter.shift_into,
+        rubband.LiveShifter.set_debug_level,
+        rubband.LiveShifter.set_default_debug_level,
     ]
 
     for function in public_callables:
@@ -618,6 +735,9 @@ class FakeNativeStretcher:
         self.expected_input_duration = 0
         self.max_process_size = 0
         self.started = False
+        self.key_frame_map: dict[int, int] = {}
+        self.frequency_cutoffs: dict[int, float] = {}
+        self.debug_level = 0
 
     def study(self, audio: NDArray[np.float32], final: bool) -> None:
         self.started = True
@@ -690,6 +810,92 @@ class FakeNativeStretcher:
 
     def retrieve(self) -> NDArray[np.float32]:
         return np.zeros((0, self.channels), dtype=np.float32)
+
+    def get_engine_version(self) -> int:
+        return 3
+
+    def set_key_frame_map(self, key_frames: dict[int, int]) -> None:
+        self.key_frame_map = key_frames
+
+    def get_frequency_cutoff(self, n: int) -> float:
+        return self.frequency_cutoffs[n]
+
+    def set_frequency_cutoff(self, n: int, frequency: float) -> None:
+        self.frequency_cutoffs[n] = frequency
+
+    def get_input_increment(self) -> int:
+        return 512
+
+    def get_output_increments(self) -> list[int]:
+        return [128, 256]
+
+    def get_phase_reset_curve(self) -> list[float]:
+        return [0.0, 0.5]
+
+    def get_exact_time_points(self) -> list[int]:
+        return [100, 200]
+
+    def set_debug_level(self, level: int) -> None:
+        self.debug_level = level
+
+    @staticmethod
+    def set_default_debug_level(level: int) -> None:
+        return None
+
+
+class FakeNativeLiveShifter:
+    def __init__(self, sample_rate: int, channels: int, option_flags: int) -> None:
+        self.sample_rate = sample_rate
+        self.channels = channels
+        self.option_flags = option_flags
+        self.pitch_scale = 1.0
+        self.formant_scale = 0.0
+        self.formant_option = 0
+        self.debug_level = 0
+
+    def reset(self) -> None:
+        return None
+
+    def set_pitch_scale(self, scale: float) -> None:
+        self.pitch_scale = scale
+
+    def set_formant_scale(self, scale: float) -> None:
+        self.formant_scale = scale
+
+    def get_pitch_scale(self) -> float:
+        return self.pitch_scale
+
+    def get_formant_scale(self) -> float:
+        return self.formant_scale
+
+    def get_start_delay(self) -> int:
+        return 32
+
+    def get_channel_count(self) -> int:
+        return self.channels
+
+    def set_formant_option(self, options: int) -> None:
+        self.formant_option = options
+
+    def get_block_size(self) -> int:
+        return 128
+
+    def shift(self, audio: NDArray[np.float32]) -> NDArray[np.float32]:
+        return audio.copy()
+
+    def shift_into(
+        self,
+        audio: NDArray[np.float32],
+        output: NDArray[np.float32],
+    ) -> None:
+        output[:] = audio
+
+    def set_debug_level(self, level: int) -> None:
+        self.debug_level = level
+
+    @staticmethod
+    def set_default_debug_level(level: int) -> None:
+        return None
 
 
 def sine_wave(seconds: float, hz: float = 440.0) -> NDArray[np.float32]:

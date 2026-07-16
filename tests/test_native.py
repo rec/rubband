@@ -200,6 +200,71 @@ def test_native_stretcher_accepts_dynamic_ratio_setters() -> None:
     assert stretcher.get_pitch_scale() == 1.5
 
 
+def test_native_stretcher_exposes_rubber_band_4_methods() -> None:
+    audio = sine_wave(seconds=1.0)
+    stretcher = rubband.Stretcher(SAMPLE_RATE, 1)
+
+    stretcher.set_key_frame_map({0: 0, SAMPLE_RATE: SAMPLE_RATE})
+    stretcher.set_debug_level(0)
+    rubband.Stretcher.set_default_debug_level(0)
+    stretcher.study(audio, final=True)
+    stretcher.process(audio, final=True)
+
+    assert stretcher.get_engine_version() >= 2
+    assert stretcher.get_input_increment() >= 0
+    assert isinstance(stretcher.get_output_increments(), list)
+    assert isinstance(stretcher.get_phase_reset_curve(), list)
+    assert isinstance(stretcher.get_exact_time_points(), list)
+
+
+def test_native_live_shifter_shifts_one_fixed_block() -> None:
+    shifter = rubband.LiveShifter(SAMPLE_RATE, 1)
+    block_size = shifter.get_block_size()
+    audio = sine_wave(seconds=1.0)[:block_size]
+
+    result = cast(NDArray[np.float32], shifter.shift(audio).numpy())
+
+    assert result.shape == (block_size,)
+    assert np.all(np.isfinite(result))
+
+
+def test_native_live_shifter_writes_into_output_buffer() -> None:
+    shifter = rubband.LiveShifter(
+        SAMPLE_RATE,
+        2,
+        options=rubband.LiveOptions(
+            window=rubband.LiveWindowOption.medium,
+            formant=rubband.LiveFormantOption.preserved,
+            channels=rubband.LiveChannelsOption.together,
+        ),
+    )
+    block_size = shifter.get_block_size()
+    audio = np.ascontiguousarray(
+        np.column_stack(
+            (
+                sine_wave(seconds=1.0, hz=330.0)[:block_size],
+                sine_wave(seconds=1.0, hz=660.0)[:block_size],
+            )
+        ),
+        dtype=np.float32,
+    )
+    output = np.zeros_like(audio)
+
+    shifter.set_pitch_scale(1.25)
+    shifter.set_formant_scale(0.5)
+    shifter.set_formant_option(rubband.LiveFormantOption.shifted)
+    shifter.set_debug_level(0)
+    rubband.LiveShifter.set_default_debug_level(0)
+    shifter.shift_into(audio, output)
+
+    assert shifter.get_pitch_scale() == 1.25
+    assert shifter.get_formant_scale() == 0.5
+    assert shifter.get_start_delay() >= 0
+    assert shifter.get_channel_count() == 2
+    assert output.shape == audio.shape
+    assert np.all(np.isfinite(output))
+
+
 def test_native_stereo_outputs_have_matching_prefixes() -> None:
     audio = np.ascontiguousarray(
         np.column_stack(
