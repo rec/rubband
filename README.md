@@ -5,9 +5,9 @@
 Rubber Band is a popular GPL C++ library for pitch shifting and time stretching with a
 long history, but all the Python bindings for it are old and unsupported.
 
-This new one uses [nanobind](https://nanobind.readthedocs.io/en/latest/), and
-[DLPack](https://dmlc.github.io/dlpack/latest/) interoperate with all common
-tensor types.
+This new one uses [nanobind](https://nanobind.readthedocs.io/en/latest/) for the
+bindings, and [DLPack](https://dmlc.github.io/dlpack/latest/) to interoperate with all
+common tensor types.
 
 ## You wrote this rather fast. Is this AI slop?
 
@@ -18,10 +18,10 @@ hand.
 
 `rubband` is my first entirely "vibe coded" library. While I carefully guided it at each
 point, backed up and tried again a couple of times, and reviewed every line, the code
-and nearly all the documentation was written by Codex.
+and all the documentation except this part was written by Codex.
 
-I was positively surprised by the quality, and I think it is quite acceptable.
-There are copious tests, and I am very responsive to issues filed.
+I was positively surprised by the quality, and I think it is quite acceptable.  There
+are copious tests, and I am very responsive to issues filed.
 
 ## If you're human, why is there an emoji in the description of this project??
 
@@ -181,9 +181,6 @@ treated as unsupported for that release.
 Generated API documentation is published at:
 
 https://rec.github.io/rubband/
-
-The API reference intentionally documents the public Python layer only. It
-should not expose `_native`, `_rubband`, or `stretch_float32`.
 
 ### License
 
