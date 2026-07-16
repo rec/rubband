@@ -187,12 +187,14 @@ should not expose `_native`, `_rubband`, or `stretch_float32`.
 
 ### License
 
-`rubband` is licensed under LGPL-2.1-only. The repository contains the LGPL 2.1
-license text in `LICENSE`, and `pyproject.toml` uses the same license
-identifier.
+`rubband` is licensed under GPL-2.0-or-later. The repository contains the GPL
+2.0 license text in `LICENSE`, and `pyproject.toml` uses the
+`GPL-2.0-or-later` SPDX identifier.
 
-Rubber Band is a separate native library with its own license. Users must have
-the Rubber Band library available at build and runtime.
+Rubber Band is a separate native library with its own GPL-compatible license
+terms. Users must have the Rubber Band library available at build and runtime
+and must comply with Rubber Band's license when building, linking,
+distributing, or deploying software that uses `rubband`.
 
 ### Local release checklist
 
