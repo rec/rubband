@@ -196,6 +196,14 @@ terms. Users must have the Rubber Band library available at build and runtime
 and must comply with Rubber Band's license when building, linking,
 distributing, or deploying software that uses `rubband`.
 
+### Known limitations
+
+- Audio input must be CPU, contiguous, `float32` memory.
+- GPU tensors are not supported.
+- The Rubber Band native library must be installed separately.
+- Dynamic ratio changes are for real-time `Stretcher` use. Offline stretchers
+  reject ratio changes after `study()` or `process()` starts.
+
 ### Local release checklist
 
 Before tagging a public release, run:
