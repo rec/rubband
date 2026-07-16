@@ -3,6 +3,7 @@ from __future__ import annotations
 import enum
 import math
 import sys
+from collections.abc import Mapping
 from enum import StrEnum
 from functools import cached_property
 from threading import Lock
@@ -86,6 +87,25 @@ class EngineOption(StrEnum):
 class PresetOption(StrEnum):
     default = enum.auto()
     percussive = enum.auto()
+
+
+class LiveWindowOption(StrEnum):
+    short = enum.auto()
+    medium = enum.auto()
+
+
+class LiveFormantOption(StrEnum):
+    shifted = enum.auto()
+    preserved = enum.auto()
+
+
+class LiveChannelsOption(StrEnum):
+    apart = enum.auto()
+    together = enum.auto()
+
+
+class LivePresetOption(StrEnum):
+    default = enum.auto()
 
 
 class Options(BaseModel):
@@ -183,6 +203,46 @@ class Options(BaseModel):
             | _PITCH_OPTIONS[self.pitch]
             | _CHANNELS_OPTIONS[self.channels]
             | _ENGINE_OPTIONS[self.engine]
+        )
+
+
+class LiveOptions(BaseModel):
+    """Rubber Band LiveShifter option flags.
+
+    Attributes:
+        preset: Rubber Band live preset to apply before explicit option values.
+        window: Live shifter window size.
+        formant: Formant handling while pitch shifting.
+        channels: Whether channels are processed independently or together.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    preset: LivePresetOption = Field(
+        default=LivePresetOption.default,
+        description="Rubber Band live preset to apply before explicit option values.",
+    )
+    window: LiveWindowOption = Field(
+        default=LiveWindowOption.short,
+        description="Live shifter window size.",
+    )
+    formant: LiveFormantOption = Field(
+        default=LiveFormantOption.shifted,
+        description="Formant handling while pitch shifting.",
+    )
+    channels: LiveChannelsOption = Field(
+        default=LiveChannelsOption.apart,
+        description="Whether channels are processed independently or together.",
+    )
+
+    @property
+    def option_flags(self) -> int:
+        """Combined Rubber Band LiveShifter option bitmask."""
+        return (
+            _LIVE_PRESET_OPTIONS[self.preset]
+            | _LIVE_WINDOW_OPTIONS[self.window]
+            | _LIVE_FORMANT_OPTIONS[self.formant]
+            | _LIVE_CHANNELS_OPTIONS[self.channels]
         )
 
 
@@ -578,6 +638,86 @@ class Stretcher(BaseModel):
         _validate_result(result, self.channels)
         return AudioBuffer(data=result)
 
+    def get_engine_version(self) -> int:
+        """Return the active Rubber Band engine version."""
+        with self._lock:
+            return self.native.get_engine_version()
+
+    def set_key_frame_map(self, key_frames: Mapping[int, int]) -> None:
+        """Set a pre-planned offline source-to-target frame mapping.
+
+        Args:
+            key_frames: Mapping from source frame positions to target frame positions.
+        """
+        mapped = _validate_key_frame_map(key_frames)
+        with self._lock:
+            if self._started:
+                raise ValueError(
+                    "key frame map cannot be changed after processing starts"
+                )
+            self.native.set_key_frame_map(mapped)
+
+    def get_frequency_cutoff(self, n: int) -> float:
+        """Return Rubber Band's frequency cutoff for the given band index.
+
+        Args:
+            n: Frequency cutoff index.
+        """
+        n = _validate_index(n)
+        with self._lock:
+            return self.native.get_frequency_cutoff(n)
+
+    def set_frequency_cutoff(self, n: int, frequency: float) -> None:
+        """Set Rubber Band's frequency cutoff for the given band index.
+
+        Args:
+            n: Frequency cutoff index.
+            frequency: Non-negative finite cutoff frequency.
+        """
+        n = _validate_index(n)
+        frequency = _validate_non_negative_ratio(frequency)
+        with self._lock:
+            self.native.set_frequency_cutoff(n, frequency)
+
+    def get_input_increment(self) -> int:
+        """Return Rubber Band's internal input increment."""
+        with self._lock:
+            return self.native.get_input_increment()
+
+    def get_output_increments(self) -> list[int]:
+        """Return accumulated internal output increments."""
+        with self._lock:
+            return list(self.native.get_output_increments())
+
+    def get_phase_reset_curve(self) -> list[float]:
+        """Return accumulated phase reset curve points."""
+        with self._lock:
+            return list(self.native.get_phase_reset_curve())
+
+    def get_exact_time_points(self) -> list[int]:
+        """Return accumulated exact time points."""
+        with self._lock:
+            return list(self.native.get_exact_time_points())
+
+    def set_debug_level(self, level: int) -> None:
+        """Set Rubber Band debug output level for this stretcher.
+
+        Args:
+            level: Non-negative Rubber Band debug level.
+        """
+        level = _validate_debug_level(level)
+        with self._lock:
+            self.native.set_debug_level(level)
+
+    @staticmethod
+    def set_default_debug_level(level: int) -> None:
+        """Set the Rubber Band default debug level for future stretchers.
+
+        Args:
+            level: Non-negative Rubber Band debug level.
+        """
+        _native.Stretcher.set_default_debug_level(_validate_debug_level(level))
+
     def _validate_dynamic_ratio_change(self) -> None:
         if self.options.process == ProcessOption.offline and self._started:
             raise ValueError(
@@ -587,6 +727,165 @@ class Stretcher(BaseModel):
     def _validate_real_time_option_change(self, name: str) -> None:
         if self.options.process == ProcessOption.offline:
             raise ValueError(f"{name} cannot be changed in offline mode")
+
+
+class LiveShifter(BaseModel):
+    """Rubber Band 4.x live pitch shifter.
+
+    Args:
+        sample_rate: Input sample rate in Hz.
+        channels: Number of audio channels.
+        options: Rubber Band LiveShifter option flags.
+    """
+
+    model_config = ConfigDict(arbitrary_types_allowed=True)
+
+    _lock: Lock = PrivateAttr(default_factory=Lock)
+
+    sample_rate: int = Field(description="Input sample rate in Hz.")
+    channels: int = Field(description="Number of audio channels.")
+    options: LiveOptions = Field(
+        default_factory=LiveOptions,
+        description="Rubber Band LiveShifter option flags.",
+    )
+
+    def __init__(
+        self,
+        sample_rate: int,
+        channels: int,
+        options: LiveOptions | None = None,
+    ) -> None:
+        super().__init__(
+            sample_rate=sample_rate,
+            channels=channels,
+            options=options or LiveOptions(),
+        )
+
+    @field_validator("sample_rate")
+    @classmethod
+    def validate_sample_rate(cls, value: int) -> int:
+        return _validate_sample_rate(value)
+
+    @field_validator("channels")
+    @classmethod
+    def validate_channels(cls, value: int) -> int:
+        return Stretcher.validate_channels(value)
+
+    @cached_property
+    def native(self) -> _native.LiveShifter:
+        return _native.LiveShifter(
+            self.sample_rate,
+            self.channels,
+            self.options.option_flags,
+        )
+
+    def reset(self) -> None:
+        """Reset internal buffers while retaining current pitch ratio."""
+        with self._lock:
+            self.native.reset()
+
+    def set_pitch_scale(self, scale: float) -> None:
+        """Set the target-to-source frequency ratio.
+
+        Args:
+            scale: Positive output-to-input pitch ratio.
+        """
+        scale = _validate_positive_ratio(scale)
+        with self._lock:
+            self.native.set_pitch_scale(scale)
+
+    def set_formant_scale(self, scale: float) -> None:
+        """Set Rubber Band's live formant scale.
+
+        Args:
+            scale: Non-negative formant scale.
+        """
+        scale = _validate_non_negative_ratio(scale)
+        with self._lock:
+            self.native.set_formant_scale(scale)
+
+    def get_pitch_scale(self) -> float:
+        """Return the current target-to-source pitch ratio."""
+        with self._lock:
+            return self.native.get_pitch_scale()
+
+    def get_formant_scale(self) -> float:
+        """Return the current Rubber Band formant scale."""
+        with self._lock:
+            return self.native.get_formant_scale()
+
+    def get_start_delay(self) -> int:
+        """Return the output frames to discard for time alignment."""
+        with self._lock:
+            return self.native.get_start_delay()
+
+    def get_channel_count(self) -> int:
+        """Return the configured channel count."""
+        with self._lock:
+            return self.native.get_channel_count()
+
+    def set_formant_option(self, option: LiveFormantOption) -> None:
+        """Set live formant handling behavior.
+
+        Args:
+            option: Live formant handling while pitch shifting.
+        """
+        with self._lock:
+            self.native.set_formant_option(_LIVE_FORMANT_OPTIONS[option])
+
+    def get_block_size(self) -> int:
+        """Return the exact frame count required by each `shift()` call."""
+        with self._lock:
+            return self.native.get_block_size()
+
+    def shift(self, audio: object) -> AudioBuffer:
+        """Pitch-shift one fixed-size live audio block.
+
+        Args:
+            audio: Contiguous CPU float32 audio with exactly `get_block_size()`
+                frames and the configured channel count.
+
+        Returns:
+            AudioBuffer with the same shape as the input block.
+        """
+        normalized = _validate_live_audio(audio, self.channels, self.get_block_size())
+        with self._lock:
+            result = self.native.shift(normalized)
+        _validate_result(result, self.channels)
+        return AudioBuffer(data=result)
+
+    def shift_into(self, audio: object, output: object) -> None:
+        """Pitch-shift one live audio block into caller-provided output memory.
+
+        Args:
+            audio: Contiguous CPU float32 input audio with exactly
+                `get_block_size()` frames and the configured channel count.
+            output: Writable contiguous CPU float32 output audio with matching shape.
+        """
+        block_size = self.get_block_size()
+        normalized = _validate_live_audio(audio, self.channels, block_size)
+        normalized_output = _validate_live_audio(output, self.channels, block_size)
+        with self._lock:
+            self.native.shift_into(normalized, normalized_output)
+
+    def set_debug_level(self, level: int) -> None:
+        """Set Rubber Band debug output level for this live shifter.
+
+        Args:
+            level: Non-negative Rubber Band debug level.
+        """
+        level = _validate_debug_level(level)
+        with self._lock:
+            self.native.set_debug_level(level)
+
+    @staticmethod
+    def set_default_debug_level(level: int) -> None:
+        """Set the Rubber Band default debug level for future live shifters.
+
+        Args:
+            level: Non-negative Rubber Band debug level.
+        """
+        _native.LiveShifter.set_default_debug_level(_validate_debug_level(level))
 
 
 def stretch(
@@ -695,6 +994,31 @@ def _validate_sample_count(value: int) -> int:
     return value
 
 
+def _validate_index(value: int) -> int:
+    if isinstance(value, bool):
+        raise TypeError("index must be an integer")
+    if value < 0:
+        raise ValueError("index must be non-negative")
+    return value
+
+
+def _validate_debug_level(value: int) -> int:
+    if isinstance(value, bool):
+        raise TypeError("debug level must be an integer")
+    if value < 0:
+        raise ValueError("debug level must be non-negative")
+    return value
+
+
+def _validate_key_frame_map(key_frames: Mapping[int, int]) -> dict[int, int]:
+    if not isinstance(key_frames, Mapping):
+        raise TypeError("key frame map must be a mapping")
+    mapped: dict[int, int] = {}
+    for source, target in key_frames.items():
+        mapped[_validate_sample_count(source)] = _validate_sample_count(target)
+    return mapped
+
+
 def _validate_audio(audio: object) -> tuple[object, int | None]:
     try:
         view = memoryview(audio)  # ty: ignore[invalid-argument-type]
@@ -753,60 +1077,92 @@ def _validate_stretcher_audio(audio: object, channels: int) -> object:
     return normalized
 
 
+def _validate_live_audio(audio: object, channels: int, frames: int) -> object:
+    normalized, detected_channels = _validate_audio(audio)
+    if detected_channels is not None and detected_channels != channels:
+        raise ValueError("audio channel count does not match live shifter")
+    try:
+        view = memoryview(normalized)  # ty: ignore[invalid-argument-type]
+    except TypeError:
+        return normalized
+    if view.shape is None:
+        raise ValueError("audio must have shape (frames,) or (frames, channels)")
+    if view.shape[0] != frames:
+        raise ValueError("audio frame count must match live shifter block size")
+    return normalized
+
+
+_CONSTANTS = _native.option_constants()
+
 _PRESET_OPTIONS = {
-    PresetOption.default: 0x00000000,
-    PresetOption.percussive: 0x00102000,
+    PresetOption.default: _CONSTANTS["preset_default"],
+    PresetOption.percussive: _CONSTANTS["preset_percussive"],
 }
 _PROCESS_OPTIONS = {
-    ProcessOption.offline: 0x00000000,
-    ProcessOption.real_time: 0x00000001,
+    ProcessOption.offline: _CONSTANTS["process_offline"],
+    ProcessOption.real_time: _CONSTANTS["process_real_time"],
 }
 _STRETCH_OPTIONS = {
-    StretchOption.elastic: 0x00000000,
-    StretchOption.precise: 0x00000010,
+    StretchOption.elastic: _CONSTANTS["stretch_elastic"],
+    StretchOption.precise: _CONSTANTS["stretch_precise"],
 }
 _TRANSIENTS_OPTIONS = {
-    TransientsOption.crisp: 0x00000000,
-    TransientsOption.mixed: 0x00000100,
-    TransientsOption.smooth: 0x00000200,
+    TransientsOption.crisp: _CONSTANTS["transients_crisp"],
+    TransientsOption.mixed: _CONSTANTS["transients_mixed"],
+    TransientsOption.smooth: _CONSTANTS["transients_smooth"],
 }
 _DETECTOR_OPTIONS = {
-    DetectorOption.compound: 0x00000000,
-    DetectorOption.percussive: 0x00000400,
-    DetectorOption.soft: 0x00000800,
+    DetectorOption.compound: _CONSTANTS["detector_compound"],
+    DetectorOption.percussive: _CONSTANTS["detector_percussive"],
+    DetectorOption.soft: _CONSTANTS["detector_soft"],
 }
 _PHASE_OPTIONS = {
-    PhaseOption.laminar: 0x00000000,
-    PhaseOption.independent: 0x00002000,
+    PhaseOption.laminar: _CONSTANTS["phase_laminar"],
+    PhaseOption.independent: _CONSTANTS["phase_independent"],
 }
 _THREADING_OPTIONS = {
-    ThreadingOption.auto: 0x00000000,
-    ThreadingOption.never: 0x00010000,
-    ThreadingOption.always: 0x00020000,
+    ThreadingOption.auto: _CONSTANTS["threading_auto"],
+    ThreadingOption.never: _CONSTANTS["threading_never"],
+    ThreadingOption.always: _CONSTANTS["threading_always"],
 }
 _WINDOW_OPTIONS = {
-    WindowOption.standard: 0x00000000,
-    WindowOption.short: 0x00100000,
-    WindowOption.long: 0x00200000,
+    WindowOption.standard: _CONSTANTS["window_standard"],
+    WindowOption.short: _CONSTANTS["window_short"],
+    WindowOption.long: _CONSTANTS["window_long"],
 }
 _SMOOTHING_OPTIONS = {
-    SmoothingOption.off: 0x00000000,
-    SmoothingOption.on: 0x00800000,
+    SmoothingOption.off: _CONSTANTS["smoothing_off"],
+    SmoothingOption.on: _CONSTANTS["smoothing_on"],
 }
 _FORMANT_OPTIONS = {
-    FormantOption.shifted: 0x00000000,
-    FormantOption.preserved: 0x01000000,
+    FormantOption.shifted: _CONSTANTS["formant_shifted"],
+    FormantOption.preserved: _CONSTANTS["formant_preserved"],
 }
 _PITCH_OPTIONS = {
-    PitchOption.high_speed: 0x00000000,
-    PitchOption.high_quality: 0x02000000,
-    PitchOption.high_consistency: 0x04000000,
+    PitchOption.high_speed: _CONSTANTS["pitch_high_speed"],
+    PitchOption.high_quality: _CONSTANTS["pitch_high_quality"],
+    PitchOption.high_consistency: _CONSTANTS["pitch_high_consistency"],
 }
 _CHANNELS_OPTIONS = {
-    ChannelsOption.apart: 0x00000000,
-    ChannelsOption.together: 0x10000000,
+    ChannelsOption.apart: _CONSTANTS["channels_apart"],
+    ChannelsOption.together: _CONSTANTS["channels_together"],
 }
 _ENGINE_OPTIONS = {
-    EngineOption.faster: 0x00000000,
-    EngineOption.finer: 0x20000000,
+    EngineOption.faster: _CONSTANTS["engine_faster"],
+    EngineOption.finer: _CONSTANTS["engine_finer"],
+}
+_LIVE_PRESET_OPTIONS = {
+    LivePresetOption.default: _CONSTANTS["live_preset_default"],
+}
+_LIVE_WINDOW_OPTIONS = {
+    LiveWindowOption.short: _CONSTANTS["live_window_short"],
+    LiveWindowOption.medium: _CONSTANTS["live_window_medium"],
+}
+_LIVE_FORMANT_OPTIONS = {
+    LiveFormantOption.shifted: _CONSTANTS["live_formant_shifted"],
+    LiveFormantOption.preserved: _CONSTANTS["live_formant_preserved"],
+}
+_LIVE_CHANNELS_OPTIONS = {
+    LiveChannelsOption.apart: _CONSTANTS["live_channels_apart"],
+    LiveChannelsOption.together: _CONSTANTS["live_channels_together"],
 }
