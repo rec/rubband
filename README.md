@@ -1,14 +1,25 @@
-# ➰ `rubband`: tensor-friendly bindings for the C++ Rubber Band pitch shifting library ➰
+# ➰ `rubband`: modern bindings for the C++ Rubber Band pitch shifting library ➰
 
 ## What is this?
 
-Rubber Band is a popular GPL C++ library for pitch shifting and time stretching with a
-long history, but all the Python bindings for it are old and unsupported and only use
-Rubber Band 3 or earlier - but version 4 has some significant new features
+[Rubber Band](https://breakfastquay.com/rubberband/) is a venerable and popular
+GPL/commercial C++ library for pitch shifting and time stretching.
 
-This new one uses [nanobind](https://nanobind.readthedocs.io/en/latest/) for the
-bindings, and [DLPack](https://dmlc.github.io/dlpack/latest/) to interoperate with all
-common tensor types.
+`rubband` uses the light and elegant
+[nanobind](https://nanobind.readthedocs.io/en/latest/) to bind Python and C++, and
+[DLPack](https://dmlc.github.io/dlpack/latest/) to accept essentially all tensor types,
+including NumPy and PyTorch.
+
+The API is designed to mimic Rubber Band's C++ API as closely as possible, and nothing
+else: it inherits Rubber Band's GPL license.
+
+## Why not use the existing projects (`rubberband`, `pyrubbberband`, `pylibrb`)?
+
+They only work on Rubber Band 3 or earlier: version 4 has `LiveShifter`, a smaller,
+simpler shifter with less latency designed for live or streaming use.
+
+And these Brand X bindings don't let you use tensors! All the real action in digital
+audio is in tensors: the combination of speed and ease-of-use is hard to beat.
 
 ## You wrote this rather fast. Is this AI slop?
 
@@ -19,19 +30,18 @@ hand.
 
 `rubband` is my first entirely "vibe coded" library. While I carefully guided it at each
 point, backed up and tried again a couple of times, and reviewed every line, the code
-and all the documentation except this part was written by Codex.
+and all the documentation except this top part was written by Codex.
 
-I was positively surprised by the quality, and I think it is quite acceptable.  There
+I was positively surprised by the quality: I think it is quite acceptable.  There
 are copious tests, and I am very responsive to issues filed.
 
 ## If you're human, why is there an emoji in the description of this project?
 
 I've been using emojis in project descriptions for about six years. They learned it from me.
 
-#### Nothing below this line was written by a person.
+#### Everything above and nothing below this line was written by a person.
 
 ------
-
 
 ## Public release notes
 
