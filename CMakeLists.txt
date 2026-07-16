@@ -42,6 +42,7 @@ set(CMAKE_REQUIRED_INCLUDES "${RUBBERBAND_INCLUDE_DIRS}")
 check_cxx_source_compiles(
     "
     #include <rubberband/RubberBandStretcher.h>
+    #include <rubberband/RubberBandLiveShifter.h>
     #ifndef RUBBERBAND_API_MAJOR_VERSION
     #error Rubber Band API version macros are unavailable.
     #endif
@@ -50,15 +51,15 @@ check_cxx_source_compiles(
     #endif
     int main() { return 0; }
     "
-    RUBBAND_HAS_RUBBERBAND_API_3
+    RUBBAND_HAS_RUBBERBAND_4
 )
 set(CMAKE_REQUIRED_INCLUDES "${_RUBBAND_PREVIOUS_REQUIRED_INCLUDES}")
 
-if(NOT RUBBAND_HAS_RUBBERBAND_API_3)
+if(NOT RUBBAND_HAS_RUBBERBAND_4)
     message(
         FATAL_ERROR
-        "Rubband requires Rubber Band API 3.0 or newer. Install Rubber Band "
-        "4.x and make it discoverable with pkg-config, CMAKE_PREFIX_PATH, or vcpkg."
+        "Rubband requires Rubber Band 4.0 or newer. Install Rubber Band 4.x "
+        "and make it discoverable with pkg-config, CMAKE_PREFIX_PATH, or vcpkg."
     )
 endif()
 
@@ -67,3 +68,4 @@ target_compile_features(_rubband PRIVATE cxx_std_17)
 target_link_libraries(_rubband PRIVATE "${RUBBERBAND_TARGET}")
 
 install(TARGETS _rubband LIBRARY DESTINATION rubband)
+install(FILES rubband/THIRD_PARTY_NOTICES.md DESTINATION rubband)

@@ -12,8 +12,8 @@ def test_release_workflow_builds_platform_wheels() -> None:
     assert "windows-latest" in workflow
     assert "brew install rubberband pkg-config" in workflow
     assert (
-        "sudo apt-get install -y build-essential curl meson ninja-build pkg-config"
-        in workflow
+        "sudo apt-get install -y build-essential curl meson ninja-build "
+        "patchelf pkg-config" in workflow
     )
     assert "rubberband/archive/refs/tags/v4.0.0.tar.gz" in workflow
     assert "sudo ninja -C build install" in workflow
@@ -23,7 +23,12 @@ def test_release_workflow_builds_platform_wheels() -> None:
     assert "CMAKE_GENERATOR=Ninja" in workflow
     assert "uv sync --dev --no-editable" in workflow
     assert "uv build --sdist --wheel --out-dir dist" in workflow
+    assert "delocate-wheel --wheel-dir wheelhouse" in workflow
+    assert "auditwheel repair --wheel-dir wheelhouse" in workflow
+    assert "delvewheel repair --wheel-dir wheelhouse" in workflow
+    assert "find wheelhouse -maxdepth 1 -name 'rubband-*.whl'" in workflow
     assert "scripts/smoke_wheel.py" in workflow
+    assert "These wheels bundle the Rubber Band 4.x native library" in workflow
     assert "gh release create" in workflow
 
 
@@ -49,9 +54,10 @@ def test_cmake_has_non_pkg_config_rubber_band_fallback() -> None:
     assert "pkg_check_modules(RUBBERBAND QUIET IMPORTED_TARGET rubberband)" in cmake
     assert "find_path(RUBBERBAND_INCLUDE_DIR rubberband/RubberBandStretcher.h)" in cmake
     assert "find_library(RUBBERBAND_LIBRARY" in cmake
-    assert "RUBBERBAND_API_MAJOR_VERSION < 3" in cmake
-    assert "Rubband requires Rubber Band API 3.0 or newer" in cmake
+    assert "RUBBAND_HAS_RUBBERBAND_4" in cmake
+    assert "Rubband requires Rubber Band 4.0 or newer" in cmake
     assert "CMAKE_PREFIX_PATH, or vcpkg" in cmake
+    assert "rubband/THIRD_PARTY_NOTICES.md" in cmake
 
 
 def test_api_docs_do_not_expose_native_internals() -> None:

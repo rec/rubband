@@ -1,7 +1,8 @@
 # Building
 
-`rubband` contains a nanobind extension over Rubber Band. Building from source
-requires Rubber Band development headers and libraries.
+`rubband` contains a nanobind extension over Rubber Band. Binary release
+wheels bundle Rubber Band 4.x, but building from source requires Rubber Band
+4.x development headers and libraries.
 
 ## macOS
 
@@ -12,9 +13,9 @@ uv build --sdist --wheel --out-dir dist
 
 ## Linux
 
-Rubber Band API 3.0 or newer is required. Many stable distributions still
-package older Rubber Band headers, so build and install Rubber Band 4.x first
-if your distribution package is too old:
+Rubber Band 4.0 or newer is required. Many stable distributions still package
+older Rubber Band headers, so build and install Rubber Band 4.x first if your
+distribution package is too old:
 
 ```sh
 sudo apt-get update

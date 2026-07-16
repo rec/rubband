@@ -60,7 +60,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential curl meson ninja-build pkg-config
+          sudo apt-get install -y build-essential curl meson ninja-build patchelf pkg-config
           curl -L --fail --silent --show-error \
             https://github.com/breakfastquay/rubberband/archive/refs/tags/v4.0.0.tar.gz \
             | tar -xz
@@ -92,20 +92,40 @@ jobs:
       - name: Build wheel and sdist
         run: uv build --sdist --wheel --out-dir dist
 
+      - name: Repair macOS wheel
+        if: runner.os == 'macOS'
+        run: |
+          uv run --with delocate delocate-wheel --wheel-dir wheelhouse dist/*.whl
+          cp dist/*.tar.gz wheelhouse/
+
+      - name: Repair Linux wheel
+        if: runner.os == 'Linux'
+        run: |
+          uv run --with auditwheel auditwheel repair --wheel-dir wheelhouse dist/*.whl
+          cp dist/*.tar.gz wheelhouse/
+
+      - name: Repair Windows wheel
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $wheel = Get-ChildItem dist/*.whl | Select-Object -First 1
+          uv run --with delvewheel delvewheel repair --wheel-dir wheelhouse "$wheel"
+          Copy-Item dist/*.tar.gz wheelhouse/
+
       - name: Smoke-test wheel
         shell: bash
         run: |
-          wheel="$(find dist -maxdepth 1 -name 'rubband-*.whl' | sort | tail -n 1)"
+          wheel="$(find wheelhouse -maxdepth 1 -name 'rubband-*.whl' | sort | tail -n 1)"
           uv run python scripts/smoke_wheel.py "$wheel"
 
       - name: Package Unix artifacts
         if: runner.os != 'Windows'
-        run: tar -czf "$ARTIFACT_NAME" -C dist .
+        run: tar -czf "$ARTIFACT_NAME" -C wheelhouse .
 
       - name: Package Windows artifacts
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Compress-Archive -Path dist/* -DestinationPath "$env:ARTIFACT_NAME"
+        run: Compress-Archive -Path wheelhouse/* -DestinationPath "$env:ARTIFACT_NAME"
 
       - name: Write Unix SHA256 checksum
         if: runner.os != 'Windows'
@@ -151,7 +171,7 @@ jobs:
           - Linux: \`rubband-$TAG-Linux.tar.gz\`
           - Windows: \`rubband-$TAG-Windows.zip\`
 
-          These wheels are built against the platform Rubber Band library used in CI.
+          These wheels bundle the Rubber Band 4.x native library used in CI.
           EOF
           notes="$(cat RELEASE-NOTES.md)"
           gh release create "$TAG" artifacts/* --repo "$GITHUB_REPOSITORY" --title "$TAG" --notes "$notes" --generate-notes

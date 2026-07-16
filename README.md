@@ -35,12 +35,20 @@ I've been using emojis in project descriptions for about six years. They learned
 ## Public release notes
 
 The first public release is intended to be a practical, minimal binding to the
-Rubber Band stretcher. The Python package wraps the native Rubber Band library;
-it does not bundle Rubber Band itself.
+Rubber Band stretcher. Binary wheels bundle the native Rubber Band 4.x library
+used in release CI; source builds still link against the Rubber Band library
+installed on the build machine.
 
 ### Installation
 
-Install the platform Rubber Band library first, then install `rubband`.
+For a released binary wheel:
+
+```sh
+pip install rubband
+```
+
+When building from source, install Rubber Band 4.x first, then install
+`rubband`.
 
 On macOS:
 
@@ -49,9 +57,9 @@ brew install rubberband pkg-config
 pip install rubband
 ```
 
-On Linux, Rubber Band API 3.0 or newer is required. Many stable
-distributions still package older Rubber Band headers, so build and install
-Rubber Band 4.x first if your distribution package is too old:
+On Linux, Rubber Band 4.0 or newer is required. Many stable distributions
+still package older Rubber Band headers, so build and install Rubber Band 4.x
+first if your distribution package is too old:
 
 ```sh
 sudo apt-get update
@@ -172,7 +180,8 @@ Release builds are configured for:
 - Windows
 
 Each platform wheel is built and smoke-tested in GitHub Actions against the
-Rubber Band library installed by that platform's package manager or `vcpkg`.
+Rubber Band 4.x library installed or built by release CI. The release workflow
+repairs those wheels so the required native shared libraries are bundled.
 If a platform-specific release artifact is missing, that platform should be
 treated as unsupported for that release.
 
@@ -189,15 +198,18 @@ https://rec.github.io/rubband/
 `GPL-2.0-or-later` SPDX identifier.
 
 Rubber Band is a separate native library with its own GPL-compatible license
-terms. Users must have the Rubber Band library available at build and runtime
-and must comply with Rubber Band's license when building, linking,
+terms. Binary wheels may include Rubber Band 4.x native binaries and related
+shared-library dependencies; `rubband` includes a third-party notice file in
+the package and distributes those binaries under their original license terms.
+Source builds must have the Rubber Band 4.x library available at build and
+runtime. Users must comply with Rubber Band's license when building, linking,
 distributing, or deploying software that uses `rubband`.
 
 ### Known limitations
 
 - Audio input must be CPU, contiguous, `float32` memory.
 - GPU tensors are not supported.
-- The Rubber Band native library must be installed separately.
+- Source builds require Rubber Band 4.x to be installed separately.
 - Dynamic ratio changes are for real-time `Stretcher` use. Offline stretchers
   reject ratio changes after `study()` or `process()` starts.
 
@@ -217,7 +229,8 @@ uv run python scripts/smoke_wheel.py dist/rubband-*.whl
 ```
 
 Then confirm the release workflow is green on macOS, Linux, and Windows after
-pushing the release tag.
+pushing the release tag, and inspect the platform artifacts for repaired
+wheels in `wheelhouse`.
 
 ### Initial release highlights
 
