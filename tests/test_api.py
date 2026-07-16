@@ -312,6 +312,7 @@ def test_stretcher_mirrors_streaming_lifecycle(
             time_ratio: float,
             pitch_scale: float,
             option_flags: int,
+            logger: object = None,
         ) -> None:
             assert sample_rate == SAMPLE_RATE
             assert channels == 2
@@ -322,6 +323,7 @@ def test_stretcher_mirrors_streaming_lifecycle(
             self.processed = False
             self.time_ratio = time_ratio
             self.pitch_scale = pitch_scale
+            self.logger = logger
 
         def study(self, audio: NDArray[np.float32], final: bool) -> None:
             assert audio.shape == (SAMPLE_RATE, 2)
@@ -406,6 +408,29 @@ def test_stretcher_mirrors_streaming_lifecycle(
     assert stretcher.available() == 3
     result = stretcher.retrieve()
     assert result.shape == (3, 2)
+
+
+def test_stretcher_accepts_logger_callback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_native, "Stretcher", FakeNativeStretcher)
+
+    def logger(*values: object) -> None:
+        return None
+
+    stretcher = rubband.Stretcher(SAMPLE_RATE, 1, logger=logger)
+
+    native = cast(FakeNativeStretcher, stretcher.native)
+    assert native.logger is logger
+
+
+def test_stretcher_rejects_non_callable_logger() -> None:
+    with pytest.raises(TypeError, match="logger"):
+        rubband.Stretcher(
+            SAMPLE_RATE,
+            1,
+            logger=object(),  # type: ignore[arg-type]
+        )
 
 
 def test_stretcher_exposes_original_accessor_methods(
@@ -611,6 +636,29 @@ def test_live_shifter_mirrors_rubber_band_live_lifecycle(
     assert native.debug_level == 1
 
 
+def test_live_shifter_accepts_logger_callback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_native, "LiveShifter", FakeNativeLiveShifter)
+
+    def logger(*values: object) -> None:
+        return None
+
+    shifter = rubband.LiveShifter(SAMPLE_RATE, 1, logger=logger)
+
+    native = cast(FakeNativeLiveShifter, shifter.native)
+    assert native.logger is logger
+
+
+def test_live_shifter_rejects_non_callable_logger() -> None:
+    with pytest.raises(TypeError, match="logger"):
+        rubband.LiveShifter(
+            SAMPLE_RATE,
+            1,
+            logger=object(),  # type: ignore[arg-type]
+        )
+
+
 def test_live_shifter_rejects_wrong_block_size(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -720,12 +768,14 @@ class FakeNativeStretcher:
         time_ratio: float,
         pitch_scale: float,
         option_flags: int,
+        logger: object = None,
     ) -> None:
         self.sample_rate = sample_rate
         self.channels = channels
         self.time_ratio = time_ratio
         self.pitch_scale = pitch_scale
         self.option_flags = option_flags
+        self.logger = logger
         self.formant_scale = 0.0
         self.transients_option = 0
         self.detector_option = 0
@@ -844,10 +894,17 @@ class FakeNativeStretcher:
 
 
 class FakeNativeLiveShifter:
-    def __init__(self, sample_rate: int, channels: int, option_flags: int) -> None:
+    def __init__(
+        self,
+        sample_rate: int,
+        channels: int,
+        option_flags: int,
+        logger: object = None,
+    ) -> None:
         self.sample_rate = sample_rate
         self.channels = channels
         self.option_flags = option_flags
+        self.logger = logger
         self.pitch_scale = 1.0
         self.formant_scale = 0.0
         self.formant_option = 0

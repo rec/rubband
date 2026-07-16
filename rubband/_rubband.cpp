@@ -3,6 +3,7 @@
 #include <map>
 #include <memory>
 #include <stdexcept>
+#include <string>
 #include <vector>
 
 #include <nanobind/nanobind.h>
@@ -15,6 +16,58 @@ namespace nb = nanobind;
 using AudioArray = nb::ndarray<const float, nb::device::cpu, nb::c_contig>;
 using MutableAudioArray = nb::ndarray<float, nb::device::cpu, nb::c_contig>;
 using OutputArray = nb::ndarray<nb::memview, float, nb::device::cpu, nb::c_contig>;
+
+class PythonStretcherLogger : public RubberBand::RubberBandStretcher::Logger {
+public:
+    explicit PythonStretcherLogger(nb::callable callback) : callback_(callback) { }
+
+    void log(const char *message) override {
+        call(message);
+    }
+
+    void log(const char *message, double value) override {
+        call(message, value);
+    }
+
+    void log(const char *message, double value1, double value2) override {
+        call(message, value1, value2);
+    }
+
+private:
+    template <typename... Args>
+    void call(Args... args) {
+        nb::gil_scoped_acquire acquire;
+        callback_(args...);
+    }
+
+    nb::callable callback_;
+};
+
+class PythonLiveShifterLogger : public RubberBand::RubberBandLiveShifter::Logger {
+public:
+    explicit PythonLiveShifterLogger(nb::callable callback) : callback_(callback) { }
+
+    void log(const char *message) override {
+        call(message);
+    }
+
+    void log(const char *message, double value) override {
+        call(message, value);
+    }
+
+    void log(const char *message, double value1, double value2) override {
+        call(message, value1, value2);
+    }
+
+private:
+    template <typename... Args>
+    void call(Args... args) {
+        nb::gil_scoped_acquire acquire;
+        callback_(args...);
+    }
+
+    nb::callable callback_;
+};
 
 size_t frame_count(AudioArray audio) {
     if (audio.ndim() != 1 && audio.ndim() != 2) {
@@ -149,12 +202,15 @@ public:
         int channels,
         double time_ratio,
         double pitch_scale,
-        int option_flags
+        int option_flags,
+        nb::object logger
     ) :
         channels_(checked_channels(channels)),
+        logger_(make_logger(logger)),
         stretcher_(
             static_cast<size_t>(sample_rate),
             channels_,
+            logger_,
             option_flags,
             time_ratio,
             pitch_scale
@@ -326,17 +382,30 @@ public:
     }
 
 private:
+    static std::shared_ptr<PythonStretcherLogger> make_logger(nb::object logger) {
+        if (logger.is_none()) {
+            return nullptr;
+        }
+        if (!PyCallable_Check(logger.ptr())) {
+            throw std::runtime_error("logger must be callable");
+        }
+        return std::make_shared<PythonStretcherLogger>(nb::cast<nb::callable>(logger));
+    }
+
     size_t channels_;
+    std::shared_ptr<PythonStretcherLogger> logger_;
     RubberBand::RubberBandStretcher stretcher_;
 };
 
 class LiveShifter {
 public:
-    LiveShifter(int sample_rate, int channels, int option_flags) :
+    LiveShifter(int sample_rate, int channels, int option_flags, nb::object logger) :
         channels_(Stretcher::checked_channels(channels)),
+        logger_(make_logger(logger)),
         shifter_(
             static_cast<size_t>(sample_rate),
             channels_,
+            logger_,
             option_flags
         ) { }
 
@@ -433,6 +502,18 @@ public:
     }
 
 private:
+    static std::shared_ptr<PythonLiveShifterLogger> make_logger(nb::object logger) {
+        if (logger.is_none()) {
+            return nullptr;
+        }
+        if (!PyCallable_Check(logger.ptr())) {
+            throw std::runtime_error("logger must be callable");
+        }
+        return std::make_shared<PythonLiveShifterLogger>(
+            nb::cast<nb::callable>(logger)
+        );
+    }
+
     void validate_shift_audio(AudioArray audio) const {
         if (frame_count(audio) != get_block_size()) {
             throw std::runtime_error("audio frame count must match live shifter block size");
@@ -452,6 +533,7 @@ private:
     }
 
     size_t channels_;
+    std::shared_ptr<PythonLiveShifterLogger> logger_;
     RubberBand::RubberBandLiveShifter shifter_;
 };
 
@@ -565,12 +647,13 @@ nb::dict option_constants() {
 NB_MODULE(_rubband, module) {
     nb::class_<Stretcher>(module, "Stretcher")
         .def(
-            nb::init<int, int, double, double, int>(),
+            nb::init<int, int, double, double, int, nb::object>(),
             nb::arg("sample_rate"),
             nb::arg("channels"),
             nb::arg("time_ratio"),
             nb::arg("pitch_scale"),
-            nb::arg("option_flags")
+            nb::arg("option_flags"),
+            nb::arg("logger") = nb::none()
         )
         .def(
             "study",
@@ -648,10 +731,11 @@ NB_MODULE(_rubband, module) {
 
     nb::class_<LiveShifter>(module, "LiveShifter")
         .def(
-            nb::init<int, int, int>(),
+            nb::init<int, int, int, nb::object>(),
             nb::arg("sample_rate"),
             nb::arg("channels"),
-            nb::arg("option_flags")
+            nb::arg("option_flags"),
+            nb::arg("logger") = nb::none()
         )
         .def("reset", &LiveShifter::reset)
         .def("set_pitch_scale", &LiveShifter::set_pitch_scale, nb::arg("scale"))

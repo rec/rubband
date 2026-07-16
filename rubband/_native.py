@@ -180,6 +180,7 @@ class Stretcher:
         time_ratio: float,
         pitch_scale: float,
         option_flags: int,
+        logger: object = None,
     ) -> None:
         self.handle = _backend().Stretcher(
             sample_rate,
@@ -187,6 +188,7 @@ class Stretcher:
             time_ratio,
             pitch_scale,
             option_flags,
+            logger,
         )
 
     def study(self, audio: object, final: bool) -> None:
@@ -294,8 +296,19 @@ class Stretcher:
 
 
 class LiveShifter:
-    def __init__(self, sample_rate: int, channels: int, option_flags: int) -> None:
-        self.handle = _backend().LiveShifter(sample_rate, channels, option_flags)
+    def __init__(
+        self,
+        sample_rate: int,
+        channels: int,
+        option_flags: int,
+        logger: object = None,
+    ) -> None:
+        self.handle = _backend().LiveShifter(
+            sample_rate,
+            channels,
+            option_flags,
+            logger,
+        )
 
     def reset(self) -> None:
         self.handle.reset()

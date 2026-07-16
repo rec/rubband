@@ -3,7 +3,7 @@ from __future__ import annotations
 import enum
 import math
 import sys
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from enum import StrEnum
 from functools import cached_property
 from threading import Lock
@@ -374,12 +374,14 @@ class Stretcher(BaseModel):
         options: Rubber Band option flags used to construct the stretcher.
         initial_time_ratio: Initial output-to-input duration ratio.
         initial_pitch_scale: Initial output-to-input pitch ratio.
+        logger: Optional callback for Rubber Band debug log messages.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     _lock: Lock = PrivateAttr(default_factory=Lock)
     _started: bool = PrivateAttr(default=False)
+    _logger: Callable[..., object] | None = PrivateAttr(default=None)
 
     sample_rate: int = Field(description="Input sample rate in Hz.")
     channels: int = Field(description="Number of audio channels.")
@@ -403,6 +405,7 @@ class Stretcher(BaseModel):
         options: Options | None = None,
         initial_time_ratio: float = 1.0,
         initial_pitch_scale: float = 1.0,
+        logger: Callable[..., object] | None = None,
     ) -> None:
         super().__init__(
             sample_rate=sample_rate,
@@ -411,6 +414,7 @@ class Stretcher(BaseModel):
             initial_time_ratio=initial_time_ratio,
             initial_pitch_scale=initial_pitch_scale,
         )
+        self._logger = _validate_logger(logger)
 
     @field_validator("sample_rate")
     @classmethod
@@ -439,6 +443,7 @@ class Stretcher(BaseModel):
             self.initial_time_ratio,
             self.initial_pitch_scale,
             self.options.option_flags,
+            self._logger,
         )
 
     def study(self, audio: object, final: bool = False) -> None:
@@ -736,11 +741,13 @@ class LiveShifter(BaseModel):
         sample_rate: Input sample rate in Hz.
         channels: Number of audio channels.
         options: Rubber Band LiveShifter option flags.
+        logger: Optional callback for Rubber Band debug log messages.
     """
 
     model_config = ConfigDict(arbitrary_types_allowed=True)
 
     _lock: Lock = PrivateAttr(default_factory=Lock)
+    _logger: Callable[..., object] | None = PrivateAttr(default=None)
 
     sample_rate: int = Field(description="Input sample rate in Hz.")
     channels: int = Field(description="Number of audio channels.")
@@ -754,12 +761,14 @@ class LiveShifter(BaseModel):
         sample_rate: int,
         channels: int,
         options: LiveOptions | None = None,
+        logger: Callable[..., object] | None = None,
     ) -> None:
         super().__init__(
             sample_rate=sample_rate,
             channels=channels,
             options=options or LiveOptions(),
         )
+        self._logger = _validate_logger(logger)
 
     @field_validator("sample_rate")
     @classmethod
@@ -777,6 +786,7 @@ class LiveShifter(BaseModel):
             self.sample_rate,
             self.channels,
             self.options.option_flags,
+            self._logger,
         )
 
     def reset(self) -> None:
@@ -1007,6 +1017,14 @@ def _validate_debug_level(value: int) -> int:
         raise TypeError("debug level must be an integer")
     if value < 0:
         raise ValueError("debug level must be non-negative")
+    return value
+
+
+def _validate_logger(
+    value: Callable[..., object] | None,
+) -> Callable[..., object] | None:
+    if value is not None and not callable(value):
+        raise TypeError("logger must be callable")
     return value
 
 

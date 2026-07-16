@@ -189,6 +189,24 @@ output = shifter.shift(audio)
 Rubber Band object is intended for live use, but Python calls are not
 guaranteed hard real-time safe.
 
+For diagnostics, `Stretcher` and `LiveShifter` accept an optional Python
+logger callback:
+
+```python
+def logger(*values: object) -> None:
+    print(values)
+
+stretcher = rubband.Stretcher(48_000, 1, logger=logger)
+stretcher.set_debug_level(1)
+```
+
+Rubber Band may call the logger from native processing code. `rubband`
+acquires the Python GIL before invoking the callback, so this is useful for
+debugging and diagnostics, but it is not hard real-time safe. Keep callbacks
+short, avoid allocation-heavy work, and do not rely on them in a low-latency
+audio callback. Exceptions raised by the logger propagate through the native
+call that triggered the log message.
+
 ### Platform support
 
 Release builds are configured for:
@@ -230,6 +248,7 @@ distributing, or deploying software that uses `rubband`.
 - Source builds require Rubber Band 4.x to be installed separately.
 - `LiveShifter` follows Rubber Band's live API, but Python itself is not a
   hard real-time runtime.
+- Python logger callbacks are diagnostic only and are not hard real-time safe.
 - Dynamic ratio changes are for real-time `Stretcher` use. Offline stretchers
   reject ratio changes after `study()` or `process()` starts.
 

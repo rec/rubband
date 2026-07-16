@@ -217,6 +217,24 @@ def test_native_stretcher_exposes_rubber_band_4_methods() -> None:
     assert isinstance(stretcher.get_exact_time_points(), list)
 
 
+def test_native_stretcher_calls_python_logger() -> None:
+    messages: list[tuple[object, ...]] = []
+
+    def logger(*values: object) -> None:
+        messages.append(values)
+
+    try:
+        rubband.Stretcher.set_default_debug_level(1)
+        stretcher = rubband.Stretcher(SAMPLE_RATE, 1, logger=logger)
+        stretcher.set_debug_level(1)
+        stretcher.set_pitch_scale(1.1)
+    finally:
+        rubband.Stretcher.set_default_debug_level(0)
+
+    assert messages
+    assert all(isinstance(m[0], str) for m in messages)
+
+
 def test_native_live_shifter_shifts_one_fixed_block() -> None:
     shifter = rubband.LiveShifter(SAMPLE_RATE, 1)
     block_size = shifter.get_block_size()
@@ -263,6 +281,24 @@ def test_native_live_shifter_writes_into_output_buffer() -> None:
     assert shifter.get_channel_count() == 2
     assert output.shape == audio.shape
     assert np.all(np.isfinite(output))
+
+
+def test_native_live_shifter_calls_python_logger() -> None:
+    messages: list[tuple[object, ...]] = []
+
+    def logger(*values: object) -> None:
+        messages.append(values)
+
+    try:
+        rubband.LiveShifter.set_default_debug_level(1)
+        shifter = rubband.LiveShifter(SAMPLE_RATE, 1, logger=logger)
+        shifter.set_debug_level(1)
+        shifter.set_pitch_scale(1.1)
+    finally:
+        rubband.LiveShifter.set_default_debug_level(0)
+
+    assert messages
+    assert all(isinstance(m[0], str) for m in messages)
 
 
 def test_native_stereo_outputs_have_matching_prefixes() -> None:
